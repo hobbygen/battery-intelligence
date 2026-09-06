@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="BatteryIntelligence.App.Views.DashboardPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:BatteryIntelligence.App.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Grid Margin="{StaticResource PageContentMargin}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="Dashboard" />
+            <TextBlock Style="{StaticResource PageSubtitleTextStyle}" Text="Live overview of battery, power and sessions. App-usage, statistics and insight cards arrive with Phases 7–8." />
+        </StackPanel>
+
+        <controls:EmptyStateView
+            Grid.Row="1"
+            VerticalAlignment="Top"
+            Glyph="&#xE850;"
+            Title="No battery detected"
+            Description="No source found a battery device on this machine. This is expected on a desktop, where battery monitoring does not apply."
+            Visibility="{x:Bind Battery.NoBattery, Mode=OneWay}" />
+
+        <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Auto" Grid.Row="1" Visibility="{x:Bind Battery.HasBattery, Mode=OneWay}">
+            <StackPanel MaxWidth="1000" HorizontalAlignment="Left" Spacing="20">
+
+                <!-- Hero -->
+                <Border Style="{StaticResource CardBorderStyle}" Padding="24,22">
+                    <StackPanel Spacing="16">
+                        <controls:CardHeader Glyph="&#xE850;" Text="BATTERY OVERVIEW" />
+                        <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Bottom">
+                            <TextBlock Style="{StaticResource HeroMetricTextStyle}" Text="{x:Bind Battery.Primary.Percentage.Text, Mode=OneWay}" />
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Style="{StaticResource SecondaryMetricTextStyle}"
+                                Foreground="{ThemeResource AppText2Brush}"
+                                Text="{x:Bind Battery.Primary.State.Text, Mode=OneWay}" />
+                        </StackPanel>
+                        <ProgressBar Maximum="100" Value="{x:Bind Battery.Primary.PercentageValue, Mode=OneWay}" />
+                        <StackPanel Orientation="Horizontal" Spacing="30">
+                            <controls:MetricStat Label="AC power" Value="{x:Bind Battery.Primary.AcOnline.Text, Mode=OneWay}" />
+                            <controls:MetricStat
+                                Label="Power"
+                                Value="{x:Bind Power.PowerMetric.Live, Mode=OneWay}"
+                                BadgeText="{x:Bind Power.PowerMetric.BadgeText, Mode=OneWay}" />
+                            <controls:MetricStat
+                                Label="Retention"
+                                Value="{x:Bind Battery.Primary.Retention.Text, Mode=OneWay}"
+                                BadgeText="{x:Bind Battery.Primary.Retention.BadgeText, Mode=OneWay}" />
+                            <controls:MetricStat Label="Temperature" Value="{x:Bind Battery.Primary.Temperature.Text, Mode=OneWay}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Battery health -->
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="14">
+                        <controls:CardHeader Glyph="&#xE95E;" Text="BATTERY HEALTH" ActionText="Details" ActionInvoked="OnCardHeaderAction" />
+                        <StackPanel Orientation="Horizontal" Spacing="30">
+                            <controls:MetricStat
+                                Label="Capacity retention"
+                                Value="{x:Bind Battery.Primary.Retention.Text, Mode=OneWay}"
+                                BadgeText="{x:Bind Battery.Primary.Retention.BadgeText, Mode=OneWay}" />
+                            <controls:MetricStat Label="Design" Value="{x:Bind Battery.Primary.Design.Text, Mode=OneWay}" />
+                            <controls:MetricStat Label="Full charge" Value="{x:Bind Battery.Primary.Full.Text, Mode=OneWay}" />
+                            <controls:MetricStat Label="Cycle count" Value="{x:Bind Battery.Primary.CycleCount.Text, Mode=OneWay}" />
+                        </StackPanel>
+                        <TextBlock
+                            Style="{StaticResource MetricLabelTextStyle}"
+                            TextWrapping="Wrap"
+                            Text="The health score and 90-day degradation trend are computed by the analytics engine in Phase 8." />
+                    </StackPanel>
+                </Border>
+
+                <!-- Current session -->
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="14">
+                        <controls:CardHeader Glyph="&#xE81C;" Text="CURRENT SESSION" />
+                        <StackPanel Visibility="{x:Bind Sessions.HasCurrentSession, Mode=OneWay}" Spacing="12">
+                            <TextBlock Style="{StaticResource SecondaryMetricTextStyle}" Text="{x:Bind Sessions.Current.Title, Mode=OneWay}" />
+                            <StackPanel Orientation="Horizontal" Spacing="30">
+                                <controls:MetricStat Label="Duration" Value="{x:Bind Sessions.Current.Duration, Mode=OneWay}" />
+                                <controls:MetricStat Label="Charge" Value="{x:Bind Sessions.Current.PercentageChange, Mode=OneWay}" />
+                                <controls:MetricStat Label="State" Value="{x:Bind Sessions.Current.Status, Mode=OneWay}" />
+                            </StackPanel>
+                            <TextBlock
+                                Style="{StaticResource MetricLabelTextStyle}"
+                                TextWrapping="Wrap"
+                                Text="{x:Bind Sessions.Current.ScreenBreakdown, Mode=OneWay}" />
+                        </StackPanel>
+                        <TextBlock
+                            Visibility="{x:Bind Sessions.NoCurrentSession, Mode=OneWay}"
+                            Foreground="{ThemeResource AppText2Brush}"
+                            TextWrapping="Wrap"
+                            Text="No session in progress — the battery is idle, on AC and not charging, or a discharge session has not finished debouncing yet." />
+                    </StackPanel>
+                </Border>
+
+                <!-- Electric power -->
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="14">
+                        <controls:CardHeader Glyph="&#xE945;" Text="ELECTRIC POWER" />
+                        <StackPanel Orientation="Horizontal" Spacing="24" VerticalAlignment="Bottom">
+                            <TextBlock Style="{StaticResource PrimaryMetricTextStyle}" Text="{x:Bind Power.PowerMetric.Live, Mode=OneWay}" />
+                            <StackPanel Orientation="Horizontal" Spacing="24">
+                                <controls:MetricStat Label="Voltage" Value="{x:Bind Power.VoltageMetric.Live, Mode=OneWay}" />
+                                <controls:MetricStat Label="Current" Value="{x:Bind Power.CurrentMetric.Live, Mode=OneWay}" BadgeText="{x:Bind Power.CurrentMetric.BadgeText, Mode=OneWay}" />
+                            </StackPanel>
+                        </StackPanel>
+                        <controls:Sparkline
+                            Height="60"
+                            Values="{x:Bind Power.PowerSpark, Mode=OneWay}"
+                            LineBrush="{ThemeResource AppAccentBrush}"
+                            FillBrush="{ThemeResource AppAccentSoftBrush}" />
+                        <StackPanel Orientation="Horizontal" Spacing="24">
+                            <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="{x:Bind Power.PowerMetric.Min, Mode=OneWay}" />
+                            <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="{x:Bind Power.PowerMetric.Average, Mode=OneWay}" />
+                            <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="{x:Bind Power.PowerMetric.Max, Mode=OneWay}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Temperature -->
+                <StackPanel Spacing="10">
+                    <controls:CardHeader Glyph="&#xE9CA;" Text="BATTERY TEMPERATURE" />
+                    <controls:EmptyStateView
+                        Glyph="&#xE9CA;"
+                        ShowValueDash="True"
+                        Title="Sensor unavailable"
+                        Description="This hardware does not expose a battery temperature sensor through the Windows or ACPI interfaces Battery Intelligence can read. It does not substitute CPU temperature, which would not reflect battery conditions."
+                        Visibility="{x:Bind Temperature.SensorUnavailable, Mode=OneWay}" />
+                    <Border
+                        Style="{StaticResource CardBorderStyle}"
+                        Visibility="{x:Bind Temperature.ShowContent, Mode=OneWay}">
+                        <StackPanel Spacing="10">
+                            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Bottom">
+                                <TextBlock Style="{StaticResource PrimaryMetricTextStyle}" Text="{x:Bind Temperature.CurrentText, Mode=OneWay}" />
+                                <TextBlock Style="{StaticResource MetricUnitTextStyle}" Text="°C" />
+                                <TextBlock VerticalAlignment="Center" Foreground="{ThemeResource AppText2Brush}" Text="{x:Bind Temperature.StatusLabel, Mode=OneWay}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="24">
+                                <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="{x:Bind Temperature.MinText, Mode=OneWay}" />
+                                <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="{x:Bind Temperature.AvgText, Mode=OneWay}" />
+                                <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="{x:Bind Temperature.MaxText, Mode=OneWay}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Phase-gated cards -->
+                <StackPanel Spacing="10">
+                    <controls:CardHeader Glyph="&#xE71D;" Text="APPLICATION USAGE" />
+                    <controls:EmptyStateView
+                        Glyph="&#xE71D;"
+                        Title="Not measured yet"
+                        Description="Per-application battery impact needs the process sampler and the estimation model that arrive in Phase 7. It will always carry an Estimated badge." />
+                </StackPanel>
+
+                <StackPanel Spacing="10">
+                    <controls:CardHeader Glyph="&#xE9D9;" Text="SMART INSIGHTS" />
+                    <controls:EmptyStateView
+                        Glyph="&#xE9D9;"
+                        Title="No insights yet"
+                        Description="Insights are generated by the rule-based analytics engine in Phase 8, and are suppressed below a confidence and effect-size threshold rather than padded out." />
+                </StackPanel>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+
+</Page>

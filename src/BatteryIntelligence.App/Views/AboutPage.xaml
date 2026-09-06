@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="BatteryIntelligence.App.Views.AboutPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:BatteryIntelligence.App.ViewModels"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Auto">
+        <StackPanel Margin="{StaticResource PageContentMargin}" MaxWidth="820" HorizontalAlignment="Left" Spacing="24">
+
+            <StackPanel>
+                <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="About" />
+                <TextBlock Style="{StaticResource PageSubtitleTextStyle}" Text="Battery Intelligence for Windows" />
+            </StackPanel>
+
+            <Border Style="{StaticResource CardBorderStyle}" Padding="26">
+                <Grid ColumnSpacing="22">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border
+                        Grid.Column="0"
+                        Width="60" Height="60"
+                        CornerRadius="12"
+                        Background="{ThemeResource AppAccentSoftBrush}">
+                        <FontIcon FontSize="30" Foreground="{ThemeResource AppAccentBrush}" Glyph="&#xE945;" />
+                    </Border>
+                    <StackPanel Grid.Column="1" Spacing="4">
+                        <TextBlock Style="{StaticResource SecondaryMetricTextStyle}" Text="Battery Intelligence" />
+                        <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="{x:Bind ViewModel.VersionLine}" />
+                        <TextBlock
+                            Margin="0,10,0,0"
+                            Foreground="{ThemeResource AppText2Brush}"
+                            TextWrapping="Wrap"
+                            Text="Everything you need to understand your laptop battery, power consumption and battery health in one place. Readings stay on your device; there is no account and no cloud." />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <StackPanel Spacing="10">
+                <TextBlock Style="{StaticResource CardKickerTextStyle}" Text="SYSTEM" />
+                <Border Style="{StaticResource CardBorderStyle}" Padding="0">
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.SystemRows}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AboutRow">
+                                <Grid Padding="16,11" ColumnSpacing="14" BorderBrush="{ThemeResource AppLine2Brush}" BorderThickness="0,0,0,1">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Foreground="{ThemeResource AppText2Brush}" Text="{x:Bind Label}" />
+                                    <TextBlock Grid.Column="1" FontWeight="SemiBold" IsTextSelectionEnabled="True" Text="{x:Bind Value}" TextWrapping="Wrap" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+            </StackPanel>
+
+            <StackPanel Spacing="10">
+                <TextBlock Style="{StaticResource CardKickerTextStyle}" Text="PRIVACY" />
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <Grid ColumnSpacing="14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Grid.Column="0" VerticalAlignment="Top" FontSize="20" Foreground="{ThemeResource AppOkBrush}" Glyph="&#xE72E;" />
+                        <TextBlock
+                            Grid.Column="1"
+                            Foreground="{ThemeResource AppText2Brush}"
+                            TextWrapping="Wrap"
+                            Text="No account required, no cloud synchronisation, no telemetry. All readings live in a single local SQLite database you can export or delete at any time from Settings." />
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            <StackPanel Spacing="10">
+                <TextBlock Style="{StaticResource CardKickerTextStyle}" Text="ACKNOWLEDGEMENTS" />
+                <TextBlock
+                    Foreground="{ThemeResource AppText2Brush}"
+                    TextWrapping="Wrap"
+                    Text="Built with the Windows App SDK and WinUI 3. Charts render on SkiaSharp via LiveChartsCore. Battery capability detection uses the Windows power-management and ACPI interfaces only — no kernel driver is installed." />
+            </StackPanel>
+
+            <TextBlock
+                Foreground="{ThemeResource AppText3Brush}"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="Battery Intelligence is an independent utility and is not affiliated with Microsoft or any hardware manufacturer." />
+
+        </StackPanel>
+    </ScrollViewer>
+
+</Page>

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Targets plain net10.0, NOT net10.0-windows, deliberately.
+
+    Core is the domain layer and must depend on nothing. Using a non-Windows
+    target framework makes that rule compiler-enforced: it is not possible to
+    call a Win32 or WinRT API from this project even by accident.
+
+    See docs/architecture.md section 2.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>BatteryIntelligence.Core</RootNamespace>
+  </PropertyGroup>
+
+</Project>

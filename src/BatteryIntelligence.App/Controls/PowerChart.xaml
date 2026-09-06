@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="BatteryIntelligence.App.Controls.PowerChart"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <!--
+        One line chart for a single ChartSeries. The only file in the App that
+        references the charting library (docs/architecture.md section 7): the
+        ViewModel exposes plain TimePoint series, this control adapts them.
+    -->
+    <Grid>
+        <StackPanel Spacing="4">
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="TitleText" Grid.Column="0" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <Border
+                    Grid.Column="1"
+                    x:Name="BadgeBorder"
+                    Style="{StaticResource GradeBadgeBorderStyle}"
+                    Visibility="Collapsed">
+                    <TextBlock x:Name="BadgeText" Style="{StaticResource GradeBadgeTextStyle}" />
+                </Border>
+            </Grid>
+
+            <Grid Height="180">
+                <ContentControl
+                    x:Name="ChartHost"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Stretch" />
+                <TextBlock
+                    x:Name="EmptyText"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Not enough data yet" />
+            </Grid>
+        </StackPanel>
+    </Grid>
+
+</UserControl>

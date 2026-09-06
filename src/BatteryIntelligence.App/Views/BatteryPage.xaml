@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="BatteryIntelligence.App.Views.BatteryPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:BatteryIntelligence.App.Controls"
+    xmlns:vm="using:BatteryIntelligence.App.ViewModels"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <DataTemplate x:Key="BatteryCardTemplate" x:DataType="vm:BatteryCardDisplay">
+            <StackPanel Spacing="20" Margin="0,0,0,20">
+
+                <!-- Hero -->
+                <Border Style="{StaticResource CardBorderStyle}" Padding="24,22">
+                    <StackPanel Spacing="16">
+                        <controls:CardHeader Glyph="&#xE850;" Text="{x:Bind Title}" />
+                        <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Bottom">
+                            <TextBlock Style="{StaticResource HeroMetricTextStyle}" Text="{x:Bind Percentage.Text}" />
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Style="{StaticResource SecondaryMetricTextStyle}" Text="{x:Bind State.Text}" />
+                                <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="{x:Bind AcOnline.Text}" />
+                            </StackPanel>
+                        </StackPanel>
+                        <ProgressBar Maximum="100" Value="{x:Bind PercentageValue}" />
+                        <StackPanel Orientation="Horizontal" Spacing="30">
+                            <controls:MetricStat Label="Design capacity" Value="{x:Bind Design.Text}" />
+                            <controls:MetricStat Label="Full charge" Value="{x:Bind Full.Text}" />
+                            <controls:MetricStat Label="Remaining" Value="{x:Bind Remaining.Text}" />
+                            <controls:MetricStat
+                                Label="Retention"
+                                Value="{x:Bind Retention.Text}"
+                                BadgeText="{x:Bind Retention.BadgeText}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Electrical -->
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="14">
+                        <controls:CardHeader Glyph="&#xE945;" Text="ELECTRICAL" />
+                        <StackPanel Orientation="Horizontal" Spacing="30">
+                            <controls:MetricStat Label="Voltage" Value="{x:Bind Voltage.Text}" BadgeText="{x:Bind Voltage.BadgeText}" />
+                            <controls:MetricStat Label="Power" Value="{x:Bind Power.Text}" BadgeText="{x:Bind Power.BadgeText}" />
+                            <controls:MetricStat Label="Current" Value="{x:Bind Current.Text}" BadgeText="{x:Bind Current.BadgeText}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Identity and lifetime -->
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="14">
+                        <controls:CardHeader Glyph="&#xE7C1;" Text="IDENTITY AND LIFETIME" />
+                        <StackPanel Orientation="Horizontal" Spacing="30">
+                            <controls:MetricStat Label="Cycle count" Value="{x:Bind CycleCount.Text}" BadgeText="{x:Bind CycleCount.BadgeText}" />
+                            <controls:MetricStat Label="Temperature" Value="{x:Bind Temperature.Text}" BadgeText="{x:Bind Temperature.BadgeText}" />
+                        </StackPanel>
+                        <TextBlock
+                            Foreground="{ThemeResource AppText3Brush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="{x:Bind Identity}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </DataTemplate>
+    </Page.Resources>
+
+    <Grid Margin="{StaticResource PageContentMargin}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0">
+                <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="Battery" />
+                <TextBlock Style="{StaticResource PageSubtitleTextStyle}" Text="Identity, capacity and health. The health score, degradation trend and charging quality land with the analytics work in Phase 8." />
+            </StackPanel>
+            <Button
+                Grid.Column="1"
+                Margin="16,4,0,0"
+                VerticalAlignment="Top"
+                AutomationProperties.Name="Refresh battery readings now"
+                Command="{x:Bind ViewModel.RefreshCommand}"
+                Content="Refresh" />
+        </Grid>
+
+        <controls:EmptyStateView
+            Grid.Row="1"
+            VerticalAlignment="Top"
+            Glyph="&#xE850;"
+            Title="No battery detected"
+            Description="No source (WinRT, WMI, IOCTL or GetSystemPowerStatus) found a battery device on this machine. This is expected on a desktop."
+            Visibility="{x:Bind ViewModel.NoBattery, Mode=OneWay}" />
+
+        <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Auto" Grid.Row="1" Visibility="{x:Bind ViewModel.HasBattery, Mode=OneWay}">
+            <StackPanel MaxWidth="1000" HorizontalAlignment="Left" Spacing="16">
+                <InfoBar
+                    IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
+                    Message="{x:Bind ViewModel.LastError, Mode=OneWay}"
+                    Severity="Warning"
+                    Title="Last read failed; showing the previous reading." />
+
+                <ContentControl
+                    Visibility="{x:Bind ViewModel.HasMultipleBatteries, Mode=OneWay}"
+                    Content="{x:Bind ViewModel.Aggregate, Mode=OneWay}"
+                    ContentTemplate="{StaticResource BatteryCardTemplate}"
+                    HorizontalContentAlignment="Stretch" />
+
+                <ItemsControl ItemsSource="{x:Bind ViewModel.Batteries, Mode=OneWay}" ItemTemplate="{StaticResource BatteryCardTemplate}" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+
+</Page>

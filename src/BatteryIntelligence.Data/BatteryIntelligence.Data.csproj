@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Plain net10.0. The persistence layer uses SQLite and System.Text.Json, both
+    of which are platform-neutral, so this project is kept free of any Windows
+    dependency. That keeps integration tests runnable on any host and prevents
+    interop leaking into the data layer.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>BatteryIntelligence.Data</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BatteryIntelligence.Core\BatteryIntelligence.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Sqlite\Migrations\*.sql" />
+  </ItemGroup>
+
+</Project>

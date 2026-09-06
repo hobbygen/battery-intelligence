@@ -1,0 +1,154 @@
+<!--
+    Design tokens imported from Claude Design ("Battery Intelligence.dc.html").
+
+    A Fluent-structured shell carrying the "Broadsheet" ink palette: a light paper
+    ground, near-black text, process-cyan as the single interactive accent and
+    magenta as a rare second spot. Values are transcribed from the .dc.html :root
+    and [data-theme="dark"] blocks and from "Battery Intelligence - Spec Sheet".
+
+    Only the colour / layout / token system is imported. Per the decision recorded
+    in the UI-import plan the app keeps Segoe UI (not Source Serif 4) and Segoe
+    Fluent Icons (not Phosphor).
+
+    Each theme dictionary also overrides a focused set of stock Fluent theme
+    resources so built-in controls (NavigationView, InfoBar, ComboBox,
+    ToggleSwitch, ProgressBar, Button) adopt the palette without per-control
+    restyling.
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ResourceDictionary.ThemeDictionaries>
+
+        <!-- "Default" is the dark theme in WinUI. -->
+        <ResourceDictionary x:Key="Default">
+            <Color x:Key="AppBgColor">#0E0D0D</Color>
+            <Color x:Key="AppSurfaceColor">#201E1D</Color>
+            <Color x:Key="AppSurface2Color">#2A2827</Color>
+            <Color x:Key="AppAccentColor">#57BCDC</Color>
+            <Color x:Key="AppMagColor">#FF7AAB</Color>
+            <Color x:Key="AppGridColor">#2C2A29</Color>
+
+            <SolidColorBrush x:Key="AppBgBrush" Color="#0E0D0D" />
+            <SolidColorBrush x:Key="AppChromeBrush" Color="#1A1918" />
+            <SolidColorBrush x:Key="AppSurfaceBrush" Color="#201E1D" />
+            <SolidColorBrush x:Key="AppSurface2Brush" Color="#2A2827" />
+            <SolidColorBrush x:Key="AppTextBrush" Color="#F2F0EE" />
+            <SolidColorBrush x:Key="AppText2Brush" Color="#A9A4A1" />
+            <SolidColorBrush x:Key="AppText3Brush" Color="#7D7877" />
+            <SolidColorBrush x:Key="AppLineBrush" Color="#343130" />
+            <SolidColorBrush x:Key="AppLine2Brush" Color="#2A2827" />
+            <SolidColorBrush x:Key="AppAccentBrush" Color="#57BCDC" />
+            <SolidColorBrush x:Key="AppAccentSoftBrush" Color="#0D2A34" />
+            <SolidColorBrush x:Key="AppAccentDeepBrush" Color="#99E0FF" />
+            <SolidColorBrush x:Key="AppMagBrush" Color="#FF7AAB" />
+            <SolidColorBrush x:Key="AppMagSoftBrush" Color="#33121F" />
+            <SolidColorBrush x:Key="AppOkBrush" Color="#5CC08E" />
+            <SolidColorBrush x:Key="AppOkSoftBrush" Color="#12251C" />
+            <SolidColorBrush x:Key="AppWarnBrush" Color="#DDA63F" />
+            <SolidColorBrush x:Key="AppWarnSoftBrush" Color="#2B2110" />
+            <SolidColorBrush x:Key="AppCritBrush" Color="#F0808A" />
+            <SolidColorBrush x:Key="AppCritSoftBrush" Color="#2E1417" />
+            <SolidColorBrush x:Key="AppGridBrush" Color="#2C2A29" />
+
+            <!-- Stock Fluent overrides -->
+            <SolidColorBrush x:Key="ApplicationPageBackgroundThemeBrush" Color="#0E0D0D" />
+            <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="#201E1D" />
+            <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#201E1D" />
+            <SolidColorBrush x:Key="CardBackgroundFillColorSecondaryBrush" Color="#1A1918" />
+            <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#343130" />
+            <SolidColorBrush x:Key="ControlStrokeColorDefaultBrush" Color="#343130" />
+            <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="#2A2827" />
+            <SolidColorBrush x:Key="SolidBackgroundFillColorBaseBrush" Color="#0E0D0D" />
+            <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#F2F0EE" />
+            <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#A9A4A1" />
+            <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#7D7877" />
+            <Color x:Key="SystemAccentColor">#57BCDC</Color>
+            <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#57BCDC" />
+            <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#4FAECC" />
+            <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#478FA6" />
+            <SolidColorBrush x:Key="NavigationViewDefaultPaneBackground" Color="#1A1918" />
+            <SolidColorBrush x:Key="NavigationViewExpandedPaneBackground" Color="#1A1918" />
+            <SolidColorBrush x:Key="NavigationViewContentBackground" Color="#0E0D0D" />
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="Light">
+            <Color x:Key="AppBgColor">#E6E4E3</Color>
+            <Color x:Key="AppSurfaceColor">#FBFAFA</Color>
+            <Color x:Key="AppSurface2Color">#EFEDEC</Color>
+            <Color x:Key="AppAccentColor">#0088B0</Color>
+            <Color x:Key="AppMagColor">#D6006C</Color>
+            <Color x:Key="AppGridColor">#E4E1E0</Color>
+
+            <SolidColorBrush x:Key="AppBgBrush" Color="#E6E4E3" />
+            <SolidColorBrush x:Key="AppChromeBrush" Color="#F3F2F2" />
+            <SolidColorBrush x:Key="AppSurfaceBrush" Color="#FBFAFA" />
+            <SolidColorBrush x:Key="AppSurface2Brush" Color="#EFEDEC" />
+            <SolidColorBrush x:Key="AppTextBrush" Color="#201E1D" />
+            <SolidColorBrush x:Key="AppText2Brush" Color="#605D5D" />
+            <SolidColorBrush x:Key="AppText3Brush" Color="#8A8584" />
+            <SolidColorBrush x:Key="AppLineBrush" Color="#DBD8D7" />
+            <SolidColorBrush x:Key="AppLine2Brush" Color="#EAE7E7" />
+            <SolidColorBrush x:Key="AppAccentBrush" Color="#0088B0" />
+            <SolidColorBrush x:Key="AppAccentSoftBrush" Color="#E9F8FF" />
+            <SolidColorBrush x:Key="AppAccentDeepBrush" Color="#006786" />
+            <SolidColorBrush x:Key="AppMagBrush" Color="#D6006C" />
+            <SolidColorBrush x:Key="AppMagSoftBrush" Color="#FFF1F4" />
+            <SolidColorBrush x:Key="AppOkBrush" Color="#11784F" />
+            <SolidColorBrush x:Key="AppOkSoftBrush" Color="#E7F3EC" />
+            <SolidColorBrush x:Key="AppWarnBrush" Color="#8A5A00" />
+            <SolidColorBrush x:Key="AppWarnSoftBrush" Color="#FDF3E0" />
+            <SolidColorBrush x:Key="AppCritBrush" Color="#B3172A" />
+            <SolidColorBrush x:Key="AppCritSoftBrush" Color="#FDECEE" />
+            <SolidColorBrush x:Key="AppGridBrush" Color="#E4E1E0" />
+
+            <!-- Stock Fluent overrides -->
+            <SolidColorBrush x:Key="ApplicationPageBackgroundThemeBrush" Color="#E6E4E3" />
+            <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="#FBFAFA" />
+            <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#FBFAFA" />
+            <SolidColorBrush x:Key="CardBackgroundFillColorSecondaryBrush" Color="#F3F2F2" />
+            <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#DBD8D7" />
+            <SolidColorBrush x:Key="ControlStrokeColorDefaultBrush" Color="#DBD8D7" />
+            <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="#EAE7E7" />
+            <SolidColorBrush x:Key="SolidBackgroundFillColorBaseBrush" Color="#E6E4E3" />
+            <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#201E1D" />
+            <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#605D5D" />
+            <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#8A8584" />
+            <Color x:Key="SystemAccentColor">#0088B0</Color>
+            <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#0088B0" />
+            <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#0180A6" />
+            <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#017897" />
+            <SolidColorBrush x:Key="NavigationViewDefaultPaneBackground" Color="#F3F2F2" />
+            <SolidColorBrush x:Key="NavigationViewExpandedPaneBackground" Color="#F3F2F2" />
+            <SolidColorBrush x:Key="NavigationViewContentBackground" Color="#E6E4E3" />
+        </ResourceDictionary>
+
+        <!-- High contrast: structural tokens track the system palette. -->
+        <ResourceDictionary x:Key="HighContrast">
+            <SolidColorBrush x:Key="AppBgBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="AppChromeBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="AppSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="AppSurface2Brush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="AppTextBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="AppText2Brush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="AppText3Brush" Color="{ThemeResource SystemColorGrayTextColor}" />
+            <SolidColorBrush x:Key="AppLineBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="AppLine2Brush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="AppAccentBrush" Color="{ThemeResource SystemColorHotlightColor}" />
+            <SolidColorBrush x:Key="AppAccentSoftBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="AppAccentDeepBrush" Color="{ThemeResource SystemColorHotlightColor}" />
+            <SolidColorBrush x:Key="AppMagBrush" Color="{ThemeResource SystemColorHotlightColor}" />
+            <SolidColorBrush x:Key="AppMagSoftBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="AppOkBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="AppOkSoftBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="AppWarnBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="AppWarnSoftBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="AppCritBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="AppCritSoftBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="AppGridBrush" Color="{ThemeResource SystemColorGrayTextColor}" />
+        </ResourceDictionary>
+
+    </ResourceDictionary.ThemeDictionaries>
+
+</ResourceDictionary>

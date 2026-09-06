@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="BatteryIntelligence.App.Views.SessionsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:BatteryIntelligence.App.Controls"
+    xmlns:vm="using:BatteryIntelligence.App.ViewModels"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <DataTemplate x:Key="RecentSessionTemplate" x:DataType="vm:SessionDisplay">
+            <Grid Padding="16,12" ColumnSpacing="16" BorderBrush="{ThemeResource AppLine2Brush}" BorderThickness="0,0,0,1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" MinWidth="96" />
+                    <ColumnDefinition Width="Auto" MinWidth="150" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" FontWeight="SemiBold" VerticalAlignment="Center" Text="{x:Bind Title}" />
+                <TextBlock Grid.Column="1" VerticalAlignment="Center" Foreground="{ThemeResource AppText2Brush}" Text="{x:Bind TimeRange}" />
+                <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{x:Bind PercentageChange}" />
+                <StackPanel Grid.Column="3" VerticalAlignment="Center" HorizontalAlignment="Right">
+                    <TextBlock HorizontalAlignment="Right" FontWeight="SemiBold" Text="{x:Bind Duration}" />
+                    <TextBlock HorizontalAlignment="Right" Style="{StaticResource MetricLabelTextStyle}" Text="{x:Bind Status}" />
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+    </Page.Resources>
+
+    <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Auto">
+        <StackPanel Margin="{StaticResource PageContentMargin}" MaxWidth="1000" HorizontalAlignment="Left" Spacing="20">
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="Sessions" />
+                    <TextBlock Style="{StaticResource PageSubtitleTextStyle}" Text="A session begins whenever the charger is connected or disconnected. Screen off, lock and sleep are events within a session, not boundaries of one." />
+                </StackPanel>
+                <Button
+                    Grid.Column="1"
+                    Margin="16,4,0,0"
+                    VerticalAlignment="Top"
+                    AutomationProperties.Name="Refresh sessions now"
+                    Command="{x:Bind ViewModel.RefreshCommand}"
+                    Content="Refresh" />
+            </Grid>
+
+            <controls:EmptyStateView
+                Glyph="&#xE81C;"
+                Title="No session in progress"
+                Description="The battery is idle — on AC and not charging, or a discharge session has not finished debouncing yet."
+                Visibility="{x:Bind ViewModel.NoCurrentSession, Mode=OneWay}" />
+
+            <Border
+                Style="{StaticResource CardBorderStyle}"
+                Padding="24,22"
+                Visibility="{x:Bind ViewModel.HasCurrentSession, Mode=OneWay}">
+                <StackPanel Spacing="16">
+                    <controls:CardHeader Glyph="&#xE81C;" Text="CURRENT SESSION" />
+                    <TextBlock Style="{StaticResource SecondaryMetricTextStyle}" Text="{x:Bind ViewModel.Current.Title, Mode=OneWay}" />
+                    <StackPanel Orientation="Horizontal" Spacing="30">
+                        <controls:MetricStat Label="Time" Value="{x:Bind ViewModel.Current.TimeRange, Mode=OneWay}" />
+                        <controls:MetricStat Label="Duration" Value="{x:Bind ViewModel.Current.Duration, Mode=OneWay}" />
+                        <controls:MetricStat Label="Charge" Value="{x:Bind ViewModel.Current.PercentageChange, Mode=OneWay}" />
+                        <controls:MetricStat Label="State" Value="{x:Bind ViewModel.Current.Status, Mode=OneWay}" />
+                    </StackPanel>
+                    <TextBlock
+                        Foreground="{ThemeResource AppText3Brush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        TextWrapping="Wrap"
+                        Text="{x:Bind ViewModel.Current.ScreenBreakdown, Mode=OneWay}" />
+                    <TextBlock
+                        Foreground="{ThemeResource AppText3Brush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="{x:Bind ViewModel.Current.Interruptions, Mode=OneWay}" />
+                </StackPanel>
+            </Border>
+
+            <StackPanel Spacing="10">
+                <controls:CardHeader Glyph="&#xE81C;" Text="RECENT SESSIONS" />
+                <controls:EmptyStateView
+                    Glyph="&#xE81C;"
+                    Title="No session history yet"
+                    Description="Sessions appear here once at least one charging or discharging session has completed."
+                    Visibility="{x:Bind ViewModel.NoRecentSessions, Mode=OneWay}" />
+                <Border
+                    Style="{StaticResource CardBorderStyle}"
+                    Padding="0"
+                    Visibility="{x:Bind ViewModel.HasRecentSessions, Mode=OneWay}">
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.Recent, Mode=OneWay}" ItemTemplate="{StaticResource RecentSessionTemplate}" />
+                </Border>
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+
+</Page>

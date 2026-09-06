@@ -1,0 +1,76 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <RootNamespace>BatteryIntelligence.App</RootNamespace>
+    <AssemblyName>BatteryIntelligence</AssemblyName>
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+
+    <!--
+      Unpackaged for development: fast inner loop, no deployment step.
+      Phase 15 adds MSIX packaging for distribution (docs/roadmap.md).
+      Framework-dependent, because Windows App Runtime 1.8 is already present.
+    -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
+
+    <!--
+      We supply our own entry point in Program.cs so that single-instance
+      redirection can be decided before the XAML application is created.
+      See docs/architecture.md section 7 and specification section 59.
+    -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+  </PropertyGroup>
+
+  <!--
+    Simulation providers are gated on a compile symbol present only in Debug, so
+    they are physically absent from Release binaries rather than merely disabled
+    by a runtime flag a corrupt settings file could flip.
+    Specification section 61; docs/architecture.md section 10.
+  -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <DefineConstants>$(DefineConstants);SIMULATION</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260804001" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
+    <PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageReference Include="Serilog.Sinks.Debug" Version="3.0.0" />
+    <PackageReference Include="H.NotifyIcon.WinUI" Version="2.4.1" />
+    <!--
+      First charting library in the solution (docs/architecture.md section 7,
+      Phase 5). GPU-accelerated via Skia; held behind the ChartSeries/PowerSeriesSet
+      domain seam so only Controls/PowerChart references it.
+    -->
+    <PackageReference Include="LiveChartsCore.SkiaSharpView.WinUI" Version="2.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BatteryIntelligence.Core\BatteryIntelligence.Core.csproj" />
+    <ProjectReference Include="..\BatteryIntelligence.Data\BatteryIntelligence.Data.csproj" />
+    <ProjectReference Include="..\BatteryIntelligence.Windows\BatteryIntelligence.Windows.csproj" />
+    <ProjectReference Include="..\BatteryIntelligence.Battery\BatteryIntelligence.Battery.csproj" />
+    <ProjectReference Include="..\BatteryIntelligence.Power\BatteryIntelligence.Power.csproj" />
+    <ProjectReference Include="..\BatteryIntelligence.Thermal\BatteryIntelligence.Thermal.csproj" />
+    <ProjectReference Include="..\BatteryIntelligence.ProcessMonitoring\BatteryIntelligence.ProcessMonitoring.csproj" />
+    <ProjectReference Include="..\BatteryIntelligence.Sessions\BatteryIntelligence.Sessions.csproj" />
+    <ProjectReference Include="..\BatteryIntelligence.Analytics\BatteryIntelligence.Analytics.csproj" />
+    <ProjectReference Include="..\BatteryIntelligence.Notifications\BatteryIntelligence.Notifications.csproj" />
+    <ProjectReference Include="..\BatteryIntelligence.Reporting\BatteryIntelligence.Reporting.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,60 @@
+using System;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+
+namespace BatteryIntelligence.App.Controls;
+
+/// <summary>The kicker row at the top of a content card: glyph + caps label + optional action link.</summary>
+public sealed partial class CardHeader : UserControl
+{
+    public static readonly DependencyProperty GlyphProperty = DependencyProperty.Register(
+        nameof(Glyph), typeof(string), typeof(CardHeader), new PropertyMetadata(""));
+
+    public static readonly DependencyProperty TextProperty = DependencyProperty.Register(
+        nameof(Text), typeof(string), typeof(CardHeader), new PropertyMetadata(string.Empty));
+
+    public static readonly DependencyProperty ActionTextProperty = DependencyProperty.Register(
+        nameof(ActionText), typeof(string), typeof(CardHeader),
+        new PropertyMetadata(string.Empty, OnActionTextChanged));
+
+    public CardHeader()
+    {
+        InitializeComponent();
+    }
+
+    /// <summary>Raised when the trailing action link is clicked.</summary>
+    public event EventHandler? ActionInvoked;
+
+    public string Glyph
+    {
+        get => (string)GetValue(GlyphProperty);
+        set => SetValue(GlyphProperty, value);
+    }
+
+    public string Text
+    {
+        get => (string)GetValue(TextProperty);
+        set => SetValue(TextProperty, value);
+    }
+
+    public string ActionText
+    {
+        get => (string)GetValue(ActionTextProperty);
+        set => SetValue(ActionTextProperty, value);
+    }
+
+    private static void OnActionTextChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        CardHeader header = (CardHeader)d;
+        header.ActionButton.Visibility = string.IsNullOrEmpty(e.NewValue as string)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+    }
+
+    private void OnActionClick(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        ActionInvoked?.Invoke(this, EventArgs.Empty);
+    }
+}

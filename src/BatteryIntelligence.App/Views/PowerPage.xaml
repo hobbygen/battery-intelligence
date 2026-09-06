@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="BatteryIntelligence.App.Views.PowerPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:BatteryIntelligence.App.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Grid Margin="{StaticResource PageContentMargin}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0">
+                <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="Power" />
+                <TextBlock Style="{StaticResource PageSubtitleTextStyle}" Text="Live electrical measurements. Current is derived from power and voltage — always a calculated value." />
+            </StackPanel>
+            <Button
+                Grid.Column="1"
+                Margin="16,4,0,0"
+                VerticalAlignment="Top"
+                AutomationProperties.Name="Refresh power readings now"
+                Command="{x:Bind ViewModel.RefreshCommand}"
+                Content="Refresh" />
+        </Grid>
+
+        <controls:EmptyStateView
+            Grid.Row="1"
+            VerticalAlignment="Top"
+            Glyph="&#xE945;"
+            Title="No battery detected"
+            Description="No source found a battery device on this machine, so there are no electrical measurements to show. This is expected on a desktop."
+            Visibility="{x:Bind ViewModel.NoBattery, Mode=OneWay}" />
+
+        <controls:EmptyStateView
+            Grid.Row="1"
+            VerticalAlignment="Top"
+            Glyph="&#xE945;"
+            Title="Waiting for the first sample"
+            Description="Power, voltage and current will appear within a few seconds of the monitoring engine's first read."
+            Visibility="{x:Bind ViewModel.ShowLoading, Mode=OneWay}" />
+
+        <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Auto" Grid.Row="1" Visibility="{x:Bind ViewModel.ShowContent, Mode=OneWay}">
+            <StackPanel MaxWidth="1000" HorizontalAlignment="Left" Spacing="20">
+
+                <InfoBar
+                    IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
+                    Message="{x:Bind ViewModel.LastError, Mode=OneWay}"
+                    Severity="Warning"
+                    Title="Last sample failed; showing the previous reading." />
+
+                <!-- Hero -->
+                <Border Style="{StaticResource CardBorderStyle}" Padding="24,22">
+                    <StackPanel Spacing="16">
+                        <controls:CardHeader Glyph="&#xE945;" Text="ELECTRICAL" />
+                        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Bottom">
+                            <TextBlock Style="{StaticResource HeroMetricTextStyle}" Text="{x:Bind ViewModel.PowerMetric.Live, Mode=OneWay}" />
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource AppText3Brush}"
+                                Text="{x:Bind ViewModel.Direction, Mode=OneWay}" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="30">
+                            <controls:MetricStat Label="Voltage" Value="{x:Bind ViewModel.VoltageMetric.Live, Mode=OneWay}" />
+                            <controls:MetricStat
+                                Label="Current"
+                                Value="{x:Bind ViewModel.CurrentMetric.Live, Mode=OneWay}"
+                                BadgeText="{x:Bind ViewModel.CurrentMetric.BadgeText, Mode=OneWay}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Chart -->
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="16">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <controls:Segmented
+                                Grid.Column="0"
+                                ItemsSource="{x:Bind ViewModel.MetricTabs}"
+                                SelectedIndex="{x:Bind ViewModel.SelectedMetricTab, Mode=TwoWay}" />
+                            <ComboBox
+                                Grid.Column="2"
+                                AutomationProperties.Name="Chart window"
+                                DisplayMemberPath="Label"
+                                ItemsSource="{x:Bind ViewModel.WindowOptions}"
+                                SelectedItem="{x:Bind ViewModel.SelectedWindow, Mode=TwoWay}" />
+                        </Grid>
+
+                        <controls:PowerChart
+                            Series="{x:Bind ViewModel.ActiveSeries, Mode=OneWay}"
+                            Badge="{x:Bind ViewModel.ActiveMetric.BadgeText, Mode=OneWay}"
+                            RangeStartUtc="{x:Bind ViewModel.Series.FromUtc, Mode=OneWay}"
+                            RangeEndUtc="{x:Bind ViewModel.Series.ToUtc, Mode=OneWay}" />
+
+                        <StackPanel Orientation="Horizontal" Spacing="26">
+                            <TextBlock Foreground="{ThemeResource AppText3Brush}" Text="{x:Bind ViewModel.ActiveMetric.Min, Mode=OneWay}" />
+                            <TextBlock Foreground="{ThemeResource AppText3Brush}" Text="{x:Bind ViewModel.ActiveMetric.Average, Mode=OneWay}" />
+                            <TextBlock Foreground="{ThemeResource AppText3Brush}" Text="{x:Bind ViewModel.ActiveMetric.Max, Mode=OneWay}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <StackPanel Spacing="10">
+                    <controls:CardHeader Glyph="&#xE9D9;" Text="DRAW BY SYSTEM STATE" />
+                    <controls:EmptyStateView
+                        Glyph="&#xE9D9;"
+                        Title="Not enough attributed data yet"
+                        Description="Breaking power draw down by screen-on / screen-off / standby needs the process and screen-state attribution that arrives in Phase 7." />
+                </StackPanel>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+
+</Page>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="BatteryIntelligence.App.Controls.Sparkline"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    MinHeight="40">
+
+    <!--
+        A dependency-free mini trend line (no charting library). A Canvas host so
+        the child shapes never feed back into layout (a Polyline that measured to
+        its own points would loop). Points are recomputed on size or data change.
+    -->
+    <Canvas x:Name="Host" SizeChanged="OnHostSizeChanged" Background="Transparent">
+        <Polygon x:Name="FillShape" Visibility="Collapsed" />
+        <Polyline x:Name="LineShape" StrokeThickness="2" StrokeLineJoin="Round" />
+        <Line
+            x:Name="BaselineShape"
+            Visibility="Collapsed"
+            StrokeThickness="1"
+            StrokeDashArray="4,4" />
+    </Canvas>
+
+</UserControl>

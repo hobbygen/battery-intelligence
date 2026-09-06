@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="BatteryIntelligence.App.Controls.CardHeader"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <!-- 16px duotone-equivalent glyph + caps kicker, optional trailing action link. -->
+    <Grid ColumnSpacing="8">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <FontIcon
+            Grid.Column="0"
+            x:Name="GlyphIcon"
+            FontSize="16"
+            VerticalAlignment="Center"
+            Foreground="{ThemeResource AppAccentBrush}"
+            Glyph="{x:Bind Glyph, Mode=OneWay}" />
+
+        <TextBlock
+            Grid.Column="1"
+            Style="{StaticResource CardKickerTextStyle}"
+            Text="{x:Bind Text, Mode=OneWay}" />
+
+        <HyperlinkButton
+            Grid.Column="2"
+            x:Name="ActionButton"
+            Padding="0"
+            Visibility="Collapsed"
+            Click="OnActionClick">
+            <TextBlock Style="{StaticResource CardActionTextStyle}" Text="{x:Bind ActionText, Mode=OneWay}" />
+        </HyperlinkButton>
+    </Grid>
+
+</UserControl>

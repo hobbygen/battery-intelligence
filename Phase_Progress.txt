@@ -1,0 +1,420 @@
+BATTERY INTELLIGENCE — PROGRESS TIMELINE
+Last updated: 2026-09-05
+Purpose: read this file first when resuming work, instead of re-reading the
+whole codebase. Full detail always lives in docs/roadmap.md (phase-by-phase,
+with exit criteria and deviations) and docs/traceability.md (requirement ->
+implementation -> test). This file is the fast orientation layer on top of those.
+
+============================================================
+CURRENT STATUS: Phase 6 of 15 complete. UI reskinned from Claude Design.
+Ready to start Phase 7 (Application usage).
+============================================================
+
+Solution builds clean (0 warnings, 0 errors) in Debug and Release.
+Test totals: 181 passing — 137 Tests.Unit, 19 Tests.Simulation, 25 Tests.Integration.
+Verified live on the reference machine (Dell laptop, Windows 11 build 26200,
+battery DELL 68ND307 / SMP / LiP, 40.0% retention — this is a real worn battery,
+not an error, and is documented as the reference reading in capability-matrix.md).
+
+To rebuild and re-verify from scratch:
+  dotnet build BatteryIntelligence.slnx -c Debug
+  dotnet build BatteryIntelligence.slnx -c Release
+  dotnet test BatteryIntelligence.slnx -c Debug
+  dotnet run --project src/BatteryIntelligence.App/BatteryIntelligence.App.csproj -c Debug
+    (launches the real WinUI app; Battery, Power, Sessions and Diagnostics pages show live data)
+
+------------------------------------------------------------
+PHASE 0 — Architecture (complete, done before this session history began)
+------------------------------------------------------------
+All design docs in /docs written and internally reviewed for contradictions
+(see roadmap.md "Consistency review"). Toolchain verified: .NET SDK 10.0.400,
+WinUI 3 / Windows App Runtime 1.8. Reference machine's real battery capabilities
+probed and recorded in capability-matrix.md section 1 — treat those numbers as
+ground truth when sanity-checking later phases.
+
+------------------------------------------------------------
+PHASE 1 — Application shell (complete)
+------------------------------------------------------------
+12 project skeletons, Directory.Build.props (nullable + warnings-as-errors),
+generic host + DI + Serilog, NavigationView shell with 11 pages, theme system
+(Light/Dark/System, Mica), ISettingsService over settings.json, single-instance
+via AppInstance.FindOrRegisterForKey, window state persistence.
+Solution file is BatteryIntelligence.slnx (new XML format, not .sln).
+
+------------------------------------------------------------
+PHASE 2 — Battery monitoring (complete)
+------------------------------------------------------------
+What shipped:
+- Core: BatteryState, BatteryDevice/BatteryInfo/BatterySnapshot,
+  CapabilityId/CapabilityRow/CapabilitySnapshot, IBatteryProvider,
+  IBatteryCapabilityDetector, IBatteryMonitoringService. Pure logic (no Windows
+  dependency, unit-testable): BatterySentinels, BatteryCalculations (retention,
+  current, mA->mW normalisation, cycle-count-zero quirk), BatteryAggregation
+  (multi-battery combine).
+- Windows project: BatteryMessageWindow (HWND_MESSAGE window, native function-
+  pointer WndProc, WM_POWERBROADCAST for GUID_ACDC_POWER_SOURCE /
+  GUID_BATTERY_PERCENTAGE_REMAINING, WM_DEVICECHANGE), SystemPowerStatusReader
+  (S2), BatteryIoctlDevice + BatteryDeviceEnumerator (S4: SetupDiGetClassDevs ->
+  CreateFile -> DeviceIoControl).
+- Battery project: WinRtBatterySource (S1), WmiBatterySource (S3),
+  IoctlBatterySource (S4), SystemPowerStatusSource (S2), CompositeBatteryProvider
+  (merges per capability-matrix.md's exact priority chains), BatteryCapabilityDetector,
+  BatteryMonitoringService (hosted service: 30s poll + power-notification-driven
+  refresh), SimulatedBatteryProvider (9 scenarios, gated on SIMULATION symbol,
+  Debug-only).
+- App: Battery page (per-device cards), Dashboard battery card, live Diagnostics
+  capability rows (C01-C14).
+
+Verified live: 84% Charging/Connected (cross-checked against Windows' own battery
+flyout), 95,008/38,008 mWh design/full capacity (exact match to capability-matrix.md),
+40.0% retention, 722 mA current calculated correctly, cycle count and temperature
+correctly Unavailable, identity "SMP / DELL 68ND307 / LiP / S/N 642" exact match.
+
+Key deviations (see roadmap.md Phase 2 for full detail):
+- Device correlation across S1/S3/S4 is POSITIONAL (by enumeration index), not
+  by shared identifier — exact for single battery (this machine, most laptops),
+  a documented simplification for multi-battery systems.
+- No design-voltage source exists on any hardware examined (WMI, IOCTL both
+  omit it) — quirk Q2 mA->mW normalisation uses LIVE voltage as approximation.
+- S6 (session notifications) and full sleep/resume re-validation deferred to
+  Phase 4, alongside the session state machine that actually needs them.
+
+------------------------------------------------------------
+PHASE 3 — Database (complete)
+------------------------------------------------------------
+What shipped:
+- Data/Sqlite: SqliteConnectionFactory (WAL, synchronous=NORMAL, foreign_keys=ON,
+  busy_timeout=5000, cache_size=-8000 — every connection gets these), DatabaseMigrator
+  (embedded V001__InitialSchema.sql, SchemaMigration bookkeeping, pre-migration
+  backup from V002 onward, rollback+degrade on failure, never crashes).
+- V001__InitialSchema.sql: all 18 tables from database.md section 4, transcribed
+  verbatim (BatteryDevice, BatterySample, PowerSample, TemperatureSample,
+  ProcessSample, ApplicationUsage, BatterySession, SessionEvent,
+  BatteryHealthSnapshot, SystemEvent, Alert, Insight, SampleMinute, SampleHour,
+  DailyStatistics, AppSettings, DataRetentionSettings, SchemaMigration).
+- Data/Repositories: BatteryDeviceRepository (upsert by HardwareId, COALESCE-
+  preserves identity fields against a transient source dropout), BatterySampleRepository
+  (one prepared statement reused across a whole batch).
+- BatterySampleWriteQueue: IBatterySampleWriteQueue, batches with 3 triggers —
+  200 rows / 30s timer / explicit FlushAsync (suspend, close, shutdown). Failed
+  flush retries; hard cap (1000) drops oldest routine rows rather than growing
+  unbounded.
+- DatabaseMaintenanceService: idempotent minute rollup (NOT EXISTS-gated, 2-min
+  safety margin past write-queue flush lag) + retention (deletes raw rows only
+  once rolled up AND past the window AND not in an open session).
+- DatabaseDiagnosticsProvider: backs Diagnostics page's DB stats (size = main
+  file + WAL/SHM sidecars, row count, last write, pending writes, last cleanup).
+- Core additions: BatterySampleValidation (Validator pipeline stage — percentage/
+  voltage/temperature/capacity/rate plausibility checks, re-grades to Suspect,
+  never drops), applied inside BatteryMonitoringService.RefreshAsync (Battery
+  project) so UI/aggregate/DB all see the same validated data.
+- App: BatteryPersistenceBridge (hosted service; the ONLY place Battery's output
+  reaches Data's input — Battery and Data must never reference each other
+  directly, they're siblings under Core). Diagnostics "Storage" section now
+  shows real DB facts instead of "Not created yet".
+- tests/BatteryIntelligence.Tests.Integration created (was deferred from Phase 1).
+
+Verified live: battery.db + -wal/-shm created and confirmed active; Diagnostics
+page showed real accumulating row count, "Last write: Just now", "Pending
+writes: 1" caught mid-batch, "Last cleanup: Just now".
+
+Bug found and fixed during this phase (worth remembering):
+- IHost starts hosted services SEQUENTIALLY in registration order, fully
+  awaiting each StartAsync. BatteryPersistenceBridge was registered after
+  BatteryMonitoringService, so BatteryMonitoringService's own startup refresh
+  (and its first Updated event) could fire before the bridge subscribed —
+  silently dropping the first reading. Fixed by having the bridge also pull
+  IBatteryMonitoringService.CurrentSnapshots directly in its own StartAsync.
+- Also fixed: App.xaml.cs was calling _host.Start() BEFORE settings.LoadAsync().
+  Hosted services (BatteryMonitoringService's poll interval, DatabaseMaintenanceService's
+  retention window) read ISettingsService.Current in their own StartAsync, so
+  settings must load first. Reordered in OnLaunched.
+
+Key deviations (see roadmap.md Phase 3 for full detail):
+- BatterySample's per-row DataQuality/MeasurementSource is a REDUCTION from
+  Core's per-field grading (schema only has one pair per row) — graded by the
+  worst populated field, sourced from the percentage reading. Every consumer
+  above the write queue still sees full per-field grading on the live
+  BatterySnapshot; only the persisted row is coarser.
+- Only MINUTE-level rollup ships. SampleHour/DailyStatistics tables exist but
+  have no producer yet — deferred until Sessions (Phase 4) and Analytics
+  (Phase 8) give them something worth summarising. MinuteRetentionDays/
+  HourRetentionDays are read into DataRetentionSettings but not yet enforced.
+- Validator matrix partially deferred: monotonic-timestamp guard and the
+  awake-percentage-jump check need Phase 4's screen state to be meaningful.
+- Backup-before-migration is implemented but has no automated test — nothing
+  to migrate TO yet (only V001 exists). Will be exercised when V002 ships.
+
+------------------------------------------------------------
+PHASE 4 — Sessions (complete)
+------------------------------------------------------------
+What shipped:
+- Core.Sessions.SessionStateMachine: the PURE state machine (per session-engine.md
+  section 8) — debounced Charging/Discharging opens, immediate AC-line-driven
+  closes, charging-interruption grace period (default 15 min), gap detection
+  (wall-clock vs Environment.TickCount64), backwards-clock rejection, Adopt()
+  for crash recovery. No hardware/DB dependency; unit-tested with a fake clock
+  (SessionStateMachineTests, 14 tests covering ALL 10 named scenarios from
+  section 8's table).
+- New Core enums (all persisted, numeric values fixed): SessionType,
+  SessionEndReason, SessionEventKind, SystemEventKind, ScreenState, LockState,
+  SystemPowerState.
+- Core.Battery.PercentageJumpDetector: shared pure helper (used by both the
+  session engine and BatteryMonitoringService) for the "jumped >25% while
+  awake" check that Phase 3 deferred.
+- Windows: BatteryMessageWindow extended for S5 (GUID_CONSOLE_DISPLAY_STATE
+  screen state), S6 (WTSRegisterSessionNotification lock/unlock), S7
+  (PBT_APMSUSPEND/PBT_APMRESUMEAUTOMATIC/PBT_APMRESUMESUSPEND suspend/resume).
+  New events: Suspended, Resumed, ScreenStateChanged, LockStateChanged.
+- Battery: BatteryMonitoringService now re-enumerates + re-detects capabilities
+  on Resume (not just WM_DEVICECHANGE), tracks awake/suspended state, grades a
+  sample Suspect on an implausible awake percentage jump.
+- Data: ISessionStore/SessionStore (Core interface, Data impl — same pattern as
+  IBatterySampleWriteQueue) + BatterySessionRepository/SessionEventRepository/
+  SystemEventRepository. BatterySampleWriteQueue.Enqueue gained screenState and
+  sessionId params — BatterySample.ScreenState and .SessionId columns (existed
+  since Phase 3's schema, never populated until now) are finally written.
+- Sessions project: PROMOTED from a hardware-free net10.0 stub to
+  net10.0-windows (see deviation below) — now holds SessionMonitoringService,
+  the orchestrator: one SessionStateMachine per battery, fed from
+  IBatteryMonitoringService.Updated + BatteryMessageWindow, persisted via
+  ISessionStore.
+- App: BatteryPersistenceBridge now tags every write with session id + screen
+  state, and flushes the write queue immediately on Suspended. Sessions page
+  (SessionsViewModel/SessionDisplay) shows live current session + history.
+
+Verified live: a REAL AC-disconnect happened during testing and was correctly
+picked up — Sessions page showed "Discharging / In progress / Started 3:43 PM /
+100% -> ... / Screen ON 1m / 0 interruptions". No warnings/errors in the log.
+Diagnostics/Dashboard/Battery pages regression-checked, all still correct.
+
+Key deviations (see roadmap.md Phase 4 for full detail — this list is long,
+read the roadmap version if touching Sessions code):
+- Sessions project is net10.0-windows now, not the plain net10.0 it was stubbed
+  as in Phase 1 — but the STATE MACHINE (Core.Sessions) stays pure/net10.0.
+  If you need to test session LOGIC, it's in Tests.Unit via Core; if you need
+  to test the ORCHESTRATOR (hardware wiring), that's not yet covered by an
+  automated test (only live-verified) — consider Tests.Simulation-style
+  coverage if this needs hardening later.
+- "Charging -> Idle" closing (transition table) vs. "pause/resume =
+  interruption" (section 3) reconciled via a grace period: Idle-while-AC-on
+  starts a timer; resume within 15 min = Interruption; exceeding it (or
+  reaching 100%) = real close.
+- Debounced session start is BACKDATED to the first sample of the confirmed
+  streak, not the confirming sample — otherwise every session start time/pct
+  understates reality by (debounce_count - 1) sampling intervals.
+- Debounce count (3) unchanged, but at today's 30s battery-poll cadence that's
+  ~90s to commit a rate-driven transition, not session-engine.md's assumed
+  ~15s (which assumed Phase 5's 5s power-sampling cadence). Self-corrects when
+  Phase 5 ships; no engine change needed.
+- Reboot has no distinct inferred SystemEventKind — gap detection can't observe
+  a reboot from inside a process that didn't survive it; crash recovery at
+  startup (RecoverAsync) handles that case without needing to know why
+  continuity broke.
+- Timeline (ISessionStore.GetTimelineAsync) returns session spans + point
+  markers for session/system events, NOT fully reconstructed contiguous
+  screen-on/off spans (session-engine.md section 7's fuller example). The
+  SystemEvent rows needed for that reconstruction ARE captured now — it's a
+  query-layer addition later, not a new instrumentation gap.
+- Standby vs hibernate not distinguished (Windows doesn't expose it to user
+  mode via PBT_APMSUSPEND).
+
+Bug found and fixed during this phase:
+- Same class of bug as Phase 3's BatteryPersistenceBridge race: nothing new
+  broke, but SessionMonitoringService.StartAsync proactively calls
+  OnBatteryUpdatedAsync() once at startup for the same reason (hosted services
+  start sequentially; whatever BatteryMonitoringService already read before
+  Sessions subscribed must still be picked up).
+
+------------------------------------------------------------
+PHASE 5 — Power monitoring (complete)
+------------------------------------------------------------
+What shipped:
+- Core.Power (pure, net10.0): PowerEstimator (the estimation-strategy.md sec 2
+  ladder — Measured -> Calculated V*I -> Estimated dmWh/dt over >=60s ->
+  Unavailable; grade only degrades), RollingStatistics (windowed min/max/avg,
+  Suspect excluded, grade = worst contributor), MinMaxDownsampler (bucketed
+  min/max-preserving decimation so spikes survive), BoundedTimeSeries (max-age
+  AND hard point cap).
+- Core models/enums: PowerReading, PowerDirection (persisted), PowerWindow,
+  TimePoint, MetricStatistics/PowerWindowStatistics, ChartSeries/PowerSeriesSet
+  (the library-neutral charting seam), IPowerMonitoringService,
+  IPowerSampleWriteQueue.
+- Battery: BatteryMonitoringService verify cadence tightened to
+  min(BatteryVerifySeconds, PowerSampleSeconds) — 5s by default. This is the
+  "Phase 5 tightens sampling" step the Phase 4 debounce note predicted; the
+  session engine now ticks every 5s (rate transitions commit in ~15s, not ~90s).
+- Power project: PROMOTED from stub. PowerMonitoringService (hosted service) —
+  rides IBatteryMonitoringService.Updated, resolves the rate via PowerEstimator
+  with a per-battery capacity history, keeps per-battery bounded series +
+  accumulators, persists via IPowerSampleWriteQueue. Core-only reference (it
+  consumes IBatteryMonitoringService / ISessionMonitoringService /
+  IPowerSampleWriteQueue, all Core interfaces) so it stays an infra sibling.
+- Data: PowerSampleRepository/PowerSampleRow, PowerSampleWriteQueue (same
+  200-row / 30s / explicit-flush / 1000-cap design as BatterySampleWriteQueue),
+  PowerSample retention in DatabaseMaintenanceService (raw-only, plain age
+  cutoff), PowerSampleRowCount added to the Diagnostics DB facts.
+- App: PowerViewModel (1 Hz-coalesced numeric readouts, window selector),
+  Controls/PowerChart (the ONLY file referencing LiveChartsCore.SkiaSharpView.WinUI
+  2.0.5), Power page — live current/voltage/power with min/max/avg + grade
+  badges, three synchronised charts sharing one X-axis range, and the four page
+  states (normal/loading/empty/unavailable).
+
+Verified live: PowerSample rows written every ~5s — power 8,533 mW (Measured
+S1/S3), voltage 11,609 mV, current 735 mA = 8,533/11,609*1000 (Calculated, row
+DataQuality=Calculated because current is the worst-graded field). App launched
+clean twice, session adoption still works, no warnings/errors. libSkiaSharp.dll
+native asset deploys correctly for the unpackaged app.
+
+Key deviations (see roadmap.md Phase 5 for full detail):
+- No dedicated fast electrical provider — reuse CompositeBatteryProvider at a
+  tightened 5s cadence. PowerEstimator rungs 2-4 still ship for other hardware.
+- Adaptive sampling (monitoring-dataflow.md sec 3) DEFERRED to Phase 13.
+- PowerSample is raw-only: no rollup tier (SampleMinute already has power from
+  BatterySample), no session link.
+- The "session" chart window is clamped to the 1h live buffer — a longer
+  session shows its last hour.
+- Charting seam is ChartSeries/PowerSeriesSet + the single PowerChart control,
+  not a full IChartSeriesSource abstraction (architecture.md sec 7's "middle
+  course").
+
+------------------------------------------------------------
+UI REFRESH — design import from Claude Design (2026-09-06, between Phase 5 and 6)
+------------------------------------------------------------
+Reskinned the whole App to the design in "Battery Intelligence.dc.html"
+(Claude Design project a83de085) — Fluent structure + "Broadsheet" ink palette
+(paper ground, near-black text, process-cyan accent, magenta second spot).
+
+What shipped:
+- Resources/AppTheme.xaml (new): token ThemeDictionaries (Light/Dark/HighContrast)
+  + a focused set of stock Fluent theme-resource overrides. Styles.xaml expanded
+  (type scale, card, kicker, grade badges, status chip). App.xaml merges AppTheme.
+- New controls: Controls/Segmented (data-seg pill selector), CardHeader, MetricStat,
+  Sparkline (dependency-free mini trend). EmptyStateView restyled to the design's
+  centred card (+ ShowValueDash, optional action). PowerChart rethemed to tokens
+  + ThresholdValue/ThresholdLabel/LineAccent DPs (for Phase 6's temp band).
+- Shell (Windows/MainWindow): 46px custom title bar with the persistent status
+  strip (live "NN% · State" pill, driven by new ShellViewModel members over
+  IBatteryMonitoringService), alert bell (placeholder flyout), theme-toggle
+  button, Settings shortcut. NavigationView: collapsible (56/224), "System"
+  footer group header, new About item. RootGrid background = AppBg (solid,
+  no acrylic behind data).
+- Pages restyled to the new card language: Dashboard, Battery, Sessions, Power,
+  Diagnostics, Settings. New AboutPage (+ AboutViewModel, real static content).
+  App Usage / Statistics / History / Alerts / Temperature keep honest
+  "arrives in Phase N" states in the new language.
+- PowerViewModel: added SelectedMetricTab / ActiveSeries / ActiveMetric / PowerSpark
+  for the tabbed single chart + dashboard sparkline. DiagnosticsViewModel: SummaryLine.
+
+Verified live on the reference machine (screenshots): all 12 pages + shell render
+correctly in Light and Dark; the title-bar theme toggle flips instantly; the
+status pill tracks the real reading; Diagnostics shows "12 of 14 capabilities
+available"; no fabricated data anywhere. Solution builds clean Debug + Release;
+158 tests still pass.
+
+Deviations (see docs/ui-navigation.md §0): Segoe UI not Source Serif 4;
+Segoe Fluent Icons not Phosphor; cards single-column (+ horizontal-scroll
+fallback) not a responsive grid; density applies on next launch; alert centre /
+session-detail / analytics cards deferred to their phases.
+
+------------------------------------------------------------
+PHASE 6 — Temperature (complete)
+------------------------------------------------------------
+Battery temperature is already resolved (S4 -> S3) inside CompositeBatteryProvider
+and carried on BatteryInfo.TemperatureCelsius (since Phase 2), so Phase 6 did NOT
+add a provider — it built the Temperature subsystem on top of that field, exactly
+as Phase 5 reused the battery pipeline for power.
+
+What shipped:
+- Core (pure): TemperatureBand/TemperatureSeverity/TemperatureWindow enums;
+  TemperatureReading/ThresholdEvent/TemperatureBandDuration models;
+  Core.Thermal.TemperatureThresholds + TemperatureBandClassifier (fixed
+  30/40/45 C band boundaries; severity classifier that moves with the configured
+  alert threshold); Core.Thermal.ThresholdEventDetector (60s dwell gate,
+  clock-injected, pure); ITemperatureMonitoringService / ITemperatureSampleWriteQueue.
+  Reuses Core.Power's RollingStatistics, BoundedTimeSeries, MinMaxDownsampler,
+  ChartSeries, MetricStatistics.
+- Thermal project: PROMOTED from the ModuleMarker stub. ThermalMonitoringService
+  (hosted service) rides IBatteryMonitoringService.Updated, classifies band +
+  severity, keeps per-battery bounded series + per-band time accumulator + rolling
+  stats, detects threshold events, persists via ITemperatureSampleWriteQueue.
+  Core-only reference, net10.0-windows (matches Power).
+- Data: TemperatureSampleRepository/Row, TemperatureSampleWriteQueue (same
+  200-row/30s/flush/1000-cap design; temperature stored deci-Kelvin), retention
+  line in DatabaseMaintenanceService (raw-only, plain age cutoff),
+  TemperatureSampleRowCount on the Diagnostics DB facts.
+- App: TemperatureViewModel (1 Hz coalesced, window selector, band breakdown,
+  threshold-event log, four page states), Views/TemperaturePage.xaml rebuilt in
+  the new design language — hero split card + severity chip, PowerChart with the
+  warning band + threshold line (LineAccent="magenta"), "time in each band" bars,
+  threshold-event list, and the UNAVAILABLE card (spec section 14 wording verbatim).
+  Dashboard temperature card + Diagnostics C13 row now driven by the live service.
+- Battery.Simulation: new RisingTemperatureWhileCharging scenario (32 -> 48 C).
+
+Verified live on the reference machine (2026-09-06, screenshot): the Temperature
+page renders the UNAVAILABLE state with its full explanation (incl. "does not
+substitute CPU temperature" and "alerts are disabled while the sensor is
+unavailable"); C13 stays Unavailable; nothing is persisted. The sensor-present
+happy path — bands, threshold-dwell detection, persistence — is covered by
+Tests.Simulation (ThermalMonitoringServiceTests, the acceptance gate for risk R7)
+and Tests.Unit (TemperatureBandClassifierTests, ThresholdEventDetectorTests).
+Solution builds clean Debug + Release; 181 tests pass.
+
+Key deviations (see docs/roadmap.md Phase 6):
+- No dedicated temperature provider — consume BatteryInfo.TemperatureCelsius.
+- TemperatureSample is raw-only (no rollup tier, no session link).
+- Window selector offers "Last hour" / "This session" only; 24h/7d/30d need the
+  Phase 11 history query layer.
+- Per-band breakdown ships; a per-screen-state split waits for Phase 7.
+- Critical threshold derived as warning + 7 C, not a second setting.
+
+============================================================
+WHAT'S NEXT: PHASE 7 — Application usage
+============================================================
+Per docs/roadmap.md: process sampler with delta CPU and bounded working set,
+metadata cache, data-driven grouping table, AppEnergyV1 estimator with baseline
+separation, ranking/sorting, daily ApplicationUsage rollup, App Usage page with
+permanent Estimated badges and a methodology link.
+Depends on: Phases 2, 3, 4, 5 — all done.
+Exit: shares sum to the attributable budget with the baseline shown separately;
+sampler cost within the CPU budget; the on-AC case states that absolute figures
+are unavailable.
+
+The App Usage page and the Dashboard "Application Usage" card are already built as
+honest "arrives in Phase 7" empty states in the new design language — Phase 7
+replaces their content, it does not restyle them.
+
+============================================================
+PROJECT STRUCTURE QUICK MAP (for when you do need to open files)
+============================================================
+src/BatteryIntelligence.Core          — domain, zero dependencies, net10.0 (no -windows).
+    Includes Core.Sessions.SessionStateMachine (pure) despite the name overlap
+    with the Sessions project — see Phase 4 deviations above.
+src/BatteryIntelligence.Windows       — Win32/WinRT interop, message window
+    (now emits Suspended/Resumed/ScreenStateChanged/LockStateChanged too)
+src/BatteryIntelligence.Battery       — providers, capability detection, monitoring service
+src/BatteryIntelligence.Data          — SQLite, repositories, migrations, write queue,
+    SessionStore
+src/BatteryIntelligence.Sessions      — SessionMonitoringService (orchestrator only;
+    the actual state machine is in Core). net10.0-windows.
+src/BatteryIntelligence.Power         — PowerMonitoringService (orchestrator);
+    PowerEstimator + the series/stats primitives live in Core.Power. Core-only
+    reference (an infra sibling, like Battery/Data). net10.0-windows.
+src/BatteryIntelligence.Thermal       — ThermalMonitoringService (orchestrator);
+    TemperatureThresholds/BandClassifier/ThresholdEventDetector live in Core.Thermal.
+    Core-only reference (infra sibling). net10.0-windows.
+src/BatteryIntelligence.App           — WinUI 3 shell, Views, ViewModels, composition root (App.xaml.cs).
+    Resources/AppTheme.xaml holds the Claude Design tokens; Controls/{Segmented,
+    CardHeader,MetricStat,Sparkline} are the new design primitives; Controls/PowerChart
+    is the only file touching LiveChartsCore.
+src/BatteryIntelligence.{ProcessMonitoring,Analytics,Notifications,Reporting}
+    — stub projects, not yet implemented (their phases are 7,8,9,11 respectively)
+tests/BatteryIntelligence.Tests.Unit         — pure logic, net10.0, fast.
+    Includes Sessions/SessionStateMachineTests.cs — the full scenario matrix.
+tests/BatteryIntelligence.Tests.Simulation   — scripted hardware scenarios, net10.0-windows,
+    SIMULATION symbol always on (Battery project ref pinned to Configuration=Debug)
+tests/BatteryIntelligence.Tests.Integration  — real SQLite file per test, net10.0
+docs/roadmap.md        — authoritative phase-by-phase plan + exit criteria + deviations
+docs/traceability.md   — requirement -> module -> implementation -> test -> status
+docs/*.md              — one design doc per concern, written in Phase 0, updated as
+                          implementation confirms or deviates from the design

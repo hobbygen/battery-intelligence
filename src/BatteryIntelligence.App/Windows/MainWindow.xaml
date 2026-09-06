@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="BatteryIntelligence.App.Windows.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:BatteryIntelligence.App.Controls"
+    xmlns:tb="using:H.NotifyIcon"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Grid x:Name="RootGrid" Background="{ThemeResource AppBgBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!--
+            Custom title bar with the persistent battery status strip
+            (docs/ui-navigation.md section 1) and quick actions. Only the left
+            region is the drag surface; the right buttons stay hit-testable.
+        -->
+        <Grid x:Name="AppTitleBar" Grid.Row="0" Height="46" Background="{ThemeResource AppChromeBrush}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" Padding="16,0,0,0" VerticalAlignment="Center">
+                <FontIcon FontSize="17" Foreground="{ThemeResource AppAccentBrush}" Glyph="&#xE945;" />
+                <TextBlock VerticalAlignment="Center" FontSize="13.5" FontWeight="SemiBold" Text="Battery Intelligence" />
+                <Border Width="1" Height="18" Background="{ThemeResource AppLineBrush}" />
+                <TextBlock
+                    VerticalAlignment="Center"
+                    FontSize="12.5"
+                    Foreground="{ThemeResource AppText3Brush}"
+                    Text="{x:Bind ViewModel.CurrentPageTitle, Mode=OneWay}" />
+            </StackPanel>
+
+            <StackPanel
+                Grid.Column="1"
+                Orientation="Horizontal"
+                Spacing="6"
+                VerticalAlignment="Center"
+                Margin="0,0,148,0">
+
+                <Border
+                    Style="{StaticResource StatusChipBorderStyle}"
+                    Height="28"
+                    Padding="11,0,11,0"
+                    CornerRadius="14"
+                    Background="{ThemeResource AppCritSoftBrush}"
+                    BorderBrush="{ThemeResource AppCritBrush}"
+                    BorderThickness="1"
+                    Visibility="{x:Bind ViewModel.IsCriticalStatus, Mode=OneWay}">
+                    <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                        <FontIcon FontSize="14" Foreground="{ThemeResource AppCritBrush}" Glyph="{x:Bind ViewModel.StatusGlyph, Mode=OneWay}" />
+                        <TextBlock FontSize="12.5" FontWeight="SemiBold" Foreground="{ThemeResource AppCritBrush}" Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
+                    </StackPanel>
+                </Border>
+
+                <Border
+                    Height="28"
+                    Padding="11,0,11,0"
+                    CornerRadius="14"
+                    Background="{ThemeResource AppAccentSoftBrush}"
+                    Visibility="{x:Bind ViewModel.IsChargingStatus, Mode=OneWay}">
+                    <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                        <FontIcon FontSize="13" Foreground="{ThemeResource AppAccentDeepBrush}" Glyph="{x:Bind ViewModel.StatusGlyph, Mode=OneWay}" />
+                        <TextBlock FontSize="12.5" FontWeight="SemiBold" Foreground="{ThemeResource AppAccentDeepBrush}" Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
+                    </StackPanel>
+                </Border>
+
+                <Border
+                    Height="28"
+                    Padding="11,0,11,0"
+                    CornerRadius="14"
+                    Background="{ThemeResource AppSurface2Brush}"
+                    Visibility="{x:Bind ViewModel.ShowNormalStatus, Mode=OneWay}">
+                    <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                        <FontIcon FontSize="13" Foreground="{ThemeResource AppText2Brush}" Glyph="{x:Bind ViewModel.StatusGlyph, Mode=OneWay}" />
+                        <TextBlock FontSize="12.5" FontWeight="SemiBold" Foreground="{ThemeResource AppText2Brush}" Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
+                    </StackPanel>
+                </Border>
+
+                <Button
+                    x:Name="AlertBellButton"
+                    Width="34" Height="30"
+                    Padding="0"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    AutomationProperties.Name="Alerts">
+                    <FontIcon FontSize="16" Glyph="&#xEA8F;" />
+                    <Button.Flyout>
+                        <Flyout>
+                            <controls:EmptyStateView
+                                Glyph="&#xEA8F;"
+                                Title="No alerts yet"
+                                Description="The alert engine, notification delivery and alert history arrive in Phase 9. Until then this centre stays empty rather than showing sample entries." />
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+
+                <Button
+                    Width="34" Height="30"
+                    Padding="0"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    AutomationProperties.Name="Toggle light and dark theme"
+                    Click="OnThemeToggleClick">
+                    <FontIcon FontSize="16" Glyph="&#xE771;" />
+                </Button>
+
+                <Button
+                    Width="34" Height="30"
+                    Padding="0"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    AutomationProperties.Name="Settings"
+                    Click="OnSettingsButtonClick">
+                    <FontIcon FontSize="16" Glyph="&#xE713;" />
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <NavigationView
+            x:Name="NavView"
+            Grid.Row="1"
+            AlwaysShowHeader="False"
+            CompactPaneLength="56"
+            ExpandedModeThresholdWidth="1008"
+            IsBackButtonVisible="Visible"
+            IsPaneToggleButtonVisible="True"
+            IsSettingsVisible="False"
+            OpenPaneLength="224"
+            PaneDisplayMode="Left"
+            SelectionChanged="OnNavigationSelectionChanged"
+            BackRequested="OnNavigationBackRequested">
+
+            <NavigationView.MenuItems>
+                <NavigationViewItem Content="Dashboard" Tag="Dashboard" AutomationProperties.Name="Dashboard">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE80F;" />
+                    </NavigationViewItem.Icon>
+                    <ToolTipService.ToolTip>
+                        <ToolTip Content="Dashboard — live overview (Ctrl+1)" />
+                    </ToolTipService.ToolTip>
+                </NavigationViewItem>
+
+                <NavigationViewItem Content="Battery" Tag="Battery" AutomationProperties.Name="Battery">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE850;" />
+                    </NavigationViewItem.Icon>
+                    <ToolTipService.ToolTip>
+                        <ToolTip Content="Battery — identity, capacity and health (Ctrl+2)" />
+                    </ToolTipService.ToolTip>
+                </NavigationViewItem>
+
+                <NavigationViewItem Content="Sessions" Tag="Sessions" AutomationProperties.Name="Sessions">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE81C;" />
+                    </NavigationViewItem.Icon>
+                    <ToolTipService.ToolTip>
+                        <ToolTip Content="Sessions — charging and discharging history (Ctrl+3)" />
+                    </ToolTipService.ToolTip>
+                </NavigationViewItem>
+
+                <NavigationViewItem Content="Power" Tag="Power" AutomationProperties.Name="Power">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE945;" />
+                    </NavigationViewItem.Icon>
+                    <ToolTipService.ToolTip>
+                        <ToolTip Content="Power — live electrical measurements (Ctrl+4)" />
+                    </ToolTipService.ToolTip>
+                </NavigationViewItem>
+
+                <NavigationViewItem Content="Temperature" Tag="Temperature" AutomationProperties.Name="Temperature">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE9CA;" />
+                    </NavigationViewItem.Icon>
+                    <ToolTipService.ToolTip>
+                        <ToolTip Content="Temperature — battery thermal monitoring (Ctrl+5)" />
+                    </ToolTipService.ToolTip>
+                </NavigationViewItem>
+
+                <NavigationViewItem Content="App Usage" Tag="AppUsage" AutomationProperties.Name="App Usage">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE71D;" />
+                    </NavigationViewItem.Icon>
+                    <ToolTipService.ToolTip>
+                        <ToolTip Content="App Usage — estimated application consumption (Ctrl+6)" />
+                    </ToolTipService.ToolTip>
+                </NavigationViewItem>
+
+                <NavigationViewItem Content="Statistics" Tag="Statistics" AutomationProperties.Name="Statistics">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE9D9;" />
+                    </NavigationViewItem.Icon>
+                    <ToolTipService.ToolTip>
+                        <ToolTip Content="Statistics — long-term summaries (Ctrl+7)" />
+                    </ToolTipService.ToolTip>
+                </NavigationViewItem>
+
+                <NavigationViewItem Content="History" Tag="History" AutomationProperties.Name="History">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE823;" />
+                    </NavigationViewItem.Icon>
+                    <ToolTipService.ToolTip>
+                        <ToolTip Content="History — charts and trends (Ctrl+8)" />
+                    </ToolTipService.ToolTip>
+                </NavigationViewItem>
+
+                <NavigationViewItem Content="Alerts" Tag="Alerts" AutomationProperties.Name="Alerts">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE7ED;" />
+                    </NavigationViewItem.Icon>
+                    <ToolTipService.ToolTip>
+                        <ToolTip Content="Alerts — history and thresholds (Ctrl+9)" />
+                    </ToolTipService.ToolTip>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+
+            <NavigationView.FooterMenuItems>
+                <NavigationViewItemHeader Content="System" />
+
+                <NavigationViewItem Content="Settings" Tag="Settings" AutomationProperties.Name="Settings">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE713;" />
+                    </NavigationViewItem.Icon>
+                    <ToolTipService.ToolTip>
+                        <ToolTip Content="Settings" />
+                    </ToolTipService.ToolTip>
+                </NavigationViewItem>
+
+                <NavigationViewItem Content="Diagnostics" Tag="Diagnostics" AutomationProperties.Name="Diagnostics">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE9D2;" />
+                    </NavigationViewItem.Icon>
+                    <ToolTipService.ToolTip>
+                        <ToolTip Content="Diagnostics — what this device exposes" />
+                    </ToolTipService.ToolTip>
+                </NavigationViewItem>
+
+                <NavigationViewItem Content="About" Tag="About" AutomationProperties.Name="About">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE946;" />
+                    </NavigationViewItem.Icon>
+                    <ToolTipService.ToolTip>
+                        <ToolTip Content="About — version and system information" />
+                    </ToolTipService.ToolTip>
+                </NavigationViewItem>
+            </NavigationView.FooterMenuItems>
+
+            <Frame x:Name="ContentFrame" />
+
+        </NavigationView>
+
+        <tb:TaskbarIcon
+            x:Name="TrayIcon"
+            ContextMenuMode="SecondWindow"
+            IconSource="ms-appx:///Assets/app.ico"
+            NoLeftClickDelay="True"
+            ToolTipText="Battery Intelligence">
+            <tb:TaskbarIcon.ContextFlyout>
+                <MenuFlyout>
+                    <MenuFlyoutItem Click="OnTrayOpenClicked" Text="Open Battery Intelligence" />
+                    <MenuFlyoutItem Click="OnTraySettingsClicked" Text="Settings" />
+                    <MenuFlyoutSeparator />
+                    <MenuFlyoutItem Click="OnTrayExitClicked" Text="Exit" />
+                </MenuFlyout>
+            </tb:TaskbarIcon.ContextFlyout>
+        </tb:TaskbarIcon>
+
+    </Grid>
+
+</Window>

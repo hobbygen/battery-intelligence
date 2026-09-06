@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="BatteryIntelligence.App.Views.StatisticsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:BatteryIntelligence.App.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Grid Margin="{StaticResource PageContentMargin}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="Statistics" />
+            <TextBlock Style="{StaticResource PageSubtitleTextStyle}" Text="Lifetime, today, 7-day and 30-day summaries." />
+        </StackPanel>
+
+        <controls:EmptyStateView
+            Grid.Row="1"
+            VerticalAlignment="Top"
+            Glyph="&#xE9D9;"
+            Title="Not computed yet"
+            Description="The statistics engine — lifetime and windowed summaries, the aggregate charts and the period comparison — is built in Phase 8, on top of the session and power history the app is already recording." />
+    </Grid>
+
+</Page>

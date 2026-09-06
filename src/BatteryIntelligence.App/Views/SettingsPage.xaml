@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="BatteryIntelligence.App.Views.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:BatteryIntelligence.App.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <Style x:Key="SettingRowGrid" TargetType="Grid">
+            <Setter Property="Padding" Value="16,14" />
+            <Setter Property="ColumnSpacing" Value="14" />
+            <Setter Property="BorderBrush" Value="{ThemeResource AppLine2Brush}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+        </Style>
+    </Page.Resources>
+
+    <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Auto">
+        <StackPanel Margin="{StaticResource PageContentMargin}" MaxWidth="1000" HorizontalAlignment="Left" Spacing="24">
+
+            <StackPanel>
+                <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="Settings" />
+                <TextBlock Style="{StaticResource PageSubtitleTextStyle}" Text="All data is stored locally on this device. Monitoring, alert and data-retention controls appear as those subsystems are built." />
+            </StackPanel>
+
+            <!-- Appearance -->
+            <StackPanel Spacing="10">
+                <TextBlock Style="{StaticResource CardKickerTextStyle}" Text="APPEARANCE" />
+                <Border Style="{StaticResource CardBorderStyle}" Padding="0">
+                    <StackPanel>
+                        <Grid Style="{StaticResource SettingRowGrid}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0" FontSize="19" Foreground="{ThemeResource AppAccentBrush}" Glyph="&#xE771;" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock FontSize="13.5" Text="Theme" />
+                                <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="Applied immediately, without restarting. System follows your Windows colour mode." />
+                            </StackPanel>
+                            <controls:Segmented
+                                Grid.Column="2"
+                                VerticalAlignment="Center"
+                                ItemsSource="{x:Bind ViewModel.ThemeOptions}"
+                                SelectedIndex="{x:Bind ViewModel.SelectedThemeIndex, Mode=TwoWay}" />
+                        </Grid>
+
+                        <Grid Style="{StaticResource SettingRowGrid}" BorderThickness="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0" FontSize="19" Foreground="{ThemeResource AppAccentBrush}" Glyph="&#xF0E2;" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock FontSize="13.5" Text="Density" />
+                                <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="Compact tightens card padding. Applied on the next launch." />
+                            </StackPanel>
+                            <controls:Segmented
+                                Grid.Column="2"
+                                VerticalAlignment="Center"
+                                ItemsSource="{x:Bind ViewModel.DensityOptions}"
+                                SelectedIndex="{x:Bind ViewModel.SelectedDensityIndex, Mode=TwoWay}" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <!-- General -->
+            <StackPanel Spacing="10">
+                <TextBlock Style="{StaticResource CardKickerTextStyle}" Text="GENERAL" />
+                <Border Style="{StaticResource CardBorderStyle}" Padding="0">
+                    <StackPanel>
+                        <Grid Style="{StaticResource SettingRowGrid}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0" FontSize="19" Foreground="{ThemeResource AppAccentBrush}" Glyph="&#xE7C4;" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock FontSize="13.5" Text="Keep running in the notification area" />
+                                <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="Closing the window keeps monitoring running instead of exiting." />
+                            </StackPanel>
+                            <ToggleSwitch
+                                Grid.Column="2"
+                                VerticalAlignment="Center"
+                                AutomationProperties.Name="Keep running in the notification area"
+                                IsOn="{x:Bind ViewModel.MinimizeToTray, Mode=TwoWay}" />
+                        </Grid>
+
+                        <Grid Style="{StaticResource SettingRowGrid}" BorderThickness="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0" FontSize="19" Foreground="{ThemeResource AppAccentBrush}" Glyph="&#xE7E8;" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock FontSize="13.5" Text="Start minimized" />
+                                <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="Launch straight to the notification area without showing the window." />
+                            </StackPanel>
+                            <ToggleSwitch
+                                Grid.Column="2"
+                                VerticalAlignment="Center"
+                                AutomationProperties.Name="Start minimized"
+                                IsEnabled="{x:Bind ViewModel.CanStartMinimized, Mode=OneWay}"
+                                IsOn="{x:Bind ViewModel.StartMinimized, Mode=TwoWay}" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <!-- Data & Privacy -->
+            <StackPanel Spacing="10">
+                <TextBlock Style="{StaticResource CardKickerTextStyle}" Text="DATA &amp; PRIVACY" />
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <Grid ColumnSpacing="14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Grid.Column="0" VerticalAlignment="Top" FontSize="19" Foreground="{ThemeResource AppOkBrush}" Glyph="&#xE72E;" />
+                        <StackPanel Grid.Column="1" Spacing="4">
+                            <TextBlock Foreground="{ThemeResource AppText2Brush}" TextWrapping="Wrap" Text="All readings stay on this device. No account, no cloud sync, no telemetry. Export and delete controls arrive with reporting in Phase 11." />
+                            <TextBlock
+                                IsTextSelectionEnabled="True"
+                                Style="{StaticResource MetricLabelTextStyle}"
+                                Text="{x:Bind ViewModel.DataDirectory}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+
+</Page>

@@ -1,0 +1,21 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BatteryIntelligence.Analytics/BatteryIntelligence.Analytics.csproj" />
+    <Project Path="src/BatteryIntelligence.App/BatteryIntelligence.App.csproj" />
+    <Project Path="src/BatteryIntelligence.Battery/BatteryIntelligence.Battery.csproj" />
+    <Project Path="src/BatteryIntelligence.Core/BatteryIntelligence.Core.csproj" />
+    <Project Path="src/BatteryIntelligence.Data/BatteryIntelligence.Data.csproj" />
+    <Project Path="src/BatteryIntelligence.Notifications/BatteryIntelligence.Notifications.csproj" />
+    <Project Path="src/BatteryIntelligence.Power/BatteryIntelligence.Power.csproj" />
+    <Project Path="src/BatteryIntelligence.ProcessMonitoring/BatteryIntelligence.ProcessMonitoring.csproj" />
+    <Project Path="src/BatteryIntelligence.Reporting/BatteryIntelligence.Reporting.csproj" />
+    <Project Path="src/BatteryIntelligence.Sessions/BatteryIntelligence.Sessions.csproj" />
+    <Project Path="src/BatteryIntelligence.Thermal/BatteryIntelligence.Thermal.csproj" />
+    <Project Path="src/BatteryIntelligence.Windows/BatteryIntelligence.Windows.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BatteryIntelligence.Tests.Integration/BatteryIntelligence.Tests.Integration.csproj" />
+    <Project Path="tests/BatteryIntelligence.Tests.Simulation/BatteryIntelligence.Tests.Simulation.csproj" />
+    <Project Path="tests/BatteryIntelligence.Tests.Unit/BatteryIntelligence.Tests.Unit.csproj" />
+  </Folder>
+</Solution>

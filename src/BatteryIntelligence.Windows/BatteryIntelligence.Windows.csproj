@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>BatteryIntelligence.Windows</RootNamespace>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <!--
+      Required for the native function-pointer window procedure in
+      BatteryMessageWindow: a raw calling-convention-attributed function pointer,
+      not a delegate, per docs/api-strategy.md section 4's AOT-friendly interop
+      convention.
+    -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BatteryIntelligence.Core\BatteryIntelligence.Core.csproj" />
+  </ItemGroup>
+
+</Project>

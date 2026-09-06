@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>BatteryIntelligence.Power</RootNamespace>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+  </PropertyGroup>
+
+  <!--
+    Core-only reference by design: this is an infrastructure sibling of Battery
+    and Data (docs/architecture.md section 3). It consumes IBatteryMonitoringService,
+    ISessionMonitoringService and IPowerSampleWriteQueue, all declared in Core, so
+    it never references those projects directly.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BatteryIntelligence.Core\BatteryIntelligence.Core.csproj" />
+  </ItemGroup>
+
+</Project>

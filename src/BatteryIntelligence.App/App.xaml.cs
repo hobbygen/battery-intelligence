@@ -1,0 +1,320 @@
+using BatteryIntelligence.App.Services;
+using BatteryIntelligence.App.ViewModels;
+using BatteryIntelligence.App.Windows;
+using BatteryIntelligence.Battery;
+using BatteryIntelligence.Battery.Sources;
+using BatteryIntelligence.Core.Configuration;
+using BatteryIntelligence.Core.Constants;
+using BatteryIntelligence.Core.Enums;
+using BatteryIntelligence.Core.Interfaces;
+using BatteryIntelligence.Data;
+using BatteryIntelligence.Data.Settings;
+using BatteryIntelligence.Data.Sqlite;
+using BatteryIntelligence.Power;
+using BatteryIntelligence.Sessions;
+using BatteryIntelligence.Thermal;
+using BatteryIntelligence.Windows;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml;
+using Serilog;
+using Serilog.Events;
+
+namespace BatteryIntelligence.App;
+
+/// <summary>
+/// Application composition root.
+/// </summary>
+/// <remarks>
+/// Builds the dependency injection container and the generic host, configures
+/// logging, loads settings, and creates the main window. Hosted services added in
+/// later phases start and stop with the host, so pausing and resuming monitoring
+/// is one coordinated operation rather than many independent flags.
+/// </remarks>
+public partial class App : Application
+{
+    private IHost? _host;
+    private MainWindow? _window;
+    private DispatcherQueue? _dispatcherQueue;
+    private BatteryMessageWindow? _messageWindow;
+
+    public App()
+    {
+        InitializeComponent();
+        UnhandledException += OnUnhandledException;
+    }
+
+    /// <summary>
+    /// The service provider for the running application.
+    /// </summary>
+    /// <remarks>
+    /// WinUI constructs pages through <see cref="Microsoft.UI.Xaml.Controls.Frame"/>
+    /// using their parameterless constructors, so pages resolve their view models
+    /// from here. This is the one place the application uses service location, and
+    /// it is confined to page constructors.
+    /// </remarks>
+    public static IServiceProvider Services =>
+        ((App)Current)._host?.Services
+        ?? throw new InvalidOperationException("The host has not been built yet.");
+
+    /// <inheritdoc/>
+    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    {
+        _ = args;
+
+        _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
+
+        _host = BuildHost();
+
+        // Created before the host starts, and on this UI thread: the message-only
+        // window must exist before BatteryMonitoringService (a hosted service)
+        // subscribes to it, and its window procedure is only ever pumped by this
+        // thread's message loop (docs/api-strategy.md section 2).
+        _messageWindow = _host.Services.GetRequiredService<BatteryMessageWindow>();
+
+        ISettingsService settings = _host.Services.GetRequiredService<ISettingsService>();
+
+        // Settings must be loaded before the host starts: several hosted
+        // services (battery polling interval, database retention window) read
+        // ISettingsService.Current in their own StartAsync, and window creation
+        // right below needs theme and geometry too. This is the only blocking
+        // wait in startup and reads a single small file.
+        settings.LoadAsync().GetAwaiter().GetResult();
+
+        // The schema must exist before any hosted service opens a connection.
+        // Like the settings load above, this is a single blocking wait at
+        // startup, against a database that (on first run) does not exist yet —
+        // it applies V001 in milliseconds, not a heavyweight operation.
+        DatabaseMigrator migrator = _host.Services.GetRequiredService<DatabaseMigrator>();
+        if (!migrator.MigrateAsync().GetAwaiter().GetResult())
+        {
+            Log.Warning("Database migration failed; battery history will not be recorded this session.");
+        }
+
+        _host.Start();
+
+        Log.Information(
+            "Battery Intelligence {Version} starting on {OS}.",
+            typeof(App).Assembly.GetName().Version,
+            Environment.OSVersion.VersionString);
+
+        _window = _host.Services.GetRequiredService<MainWindow>();
+        _window.Closed += OnWindowClosed;
+
+        if (settings.Current.General.StartMinimized && settings.Current.General.MinimizeToTray)
+        {
+            _window.LaunchHidden();
+        }
+        else
+        {
+            _window.Activate();
+        }
+    }
+
+    /// <summary>
+    /// Called when a second launch is redirected to this instance.
+    /// </summary>
+    /// <remarks>
+    /// Invoked on a background thread by the activation listener, so the work is
+    /// marshalled onto the UI thread before touching the window.
+    /// </remarks>
+    public void OnRelaunched()
+    {
+        _dispatcherQueue?.TryEnqueue(() =>
+        {
+            Log.Information("Second launch redirected to the running instance.");
+            _window?.BringToFront();
+        });
+    }
+
+    private IHost BuildHost()
+    {
+        HostApplicationBuilder builder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings
+        {
+            ApplicationName = "BatteryIntelligence",
+        });
+
+        ConfigureLogging(builder);
+        ConfigureServices(builder.Services);
+
+        return builder.Build();
+    }
+
+    private static void ConfigureLogging(HostApplicationBuilder builder)
+    {
+        // Settings are not loaded yet, so the file is read directly to pick up a
+        // configured log level. A failure here must not prevent startup: logging
+        // falls back to Information.
+        LogEventLevel level = ReadConfiguredLogLevel();
+
+        Log.Logger = new LoggerConfiguration()
+            .MinimumLevel.Is(level)
+            .Enrich.WithProperty("Version", typeof(App).Assembly.GetName().Version?.ToString() ?? "unknown")
+            .WriteTo.Debug()
+            .WriteTo.File(
+                path: Path.Combine(AppPaths.LogsDirectory, "app-.log"),
+                rollingInterval: RollingInterval.Day,
+                // Bounded so logs cannot grow without limit (specification section 48).
+                fileSizeLimitBytes: 8 * 1024 * 1024,
+                rollOnFileSizeLimit: true,
+                retainedFileCountLimit: 14,
+                shared: true,
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}")
+            .CreateLogger();
+
+        builder.Logging.ClearProviders();
+        builder.Logging.AddSerilog(Log.Logger, dispose: true);
+    }
+
+    private static LogEventLevel ReadConfiguredLogLevel()
+    {
+        try
+        {
+            if (!File.Exists(AppPaths.SettingsFile))
+            {
+                return LogEventLevel.Information;
+            }
+
+            using FileStream stream = File.OpenRead(AppPaths.SettingsFile);
+            AppSettings? settings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(
+                stream,
+                new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
+                });
+
+            return settings?.Advanced.LogLevel switch
+            {
+                LogVerbosity.Trace => LogEventLevel.Verbose,
+                LogVerbosity.Debug => LogEventLevel.Debug,
+                LogVerbosity.Warning => LogEventLevel.Warning,
+                LogVerbosity.Error => LogEventLevel.Error,
+                LogVerbosity.Critical => LogEventLevel.Fatal,
+                _ => LogEventLevel.Information,
+            };
+        }
+        catch (Exception)
+        {
+            // Any failure reading the level is non-fatal; the default stands.
+            return LogEventLevel.Information;
+        }
+    }
+
+    private static void ConfigureServices(IServiceCollection services)
+    {
+        // Infrastructure
+        services.AddSingleton<ISettingsService, JsonSettingsService>();
+
+        // Persistence (Phase 3)
+        services.AddSingleton<ISqliteConnectionFactory>(sp =>
+        {
+            ISettingsService settingsService = sp.GetRequiredService<ISettingsService>();
+            string path = AppPaths.DatabaseFile(settingsService.Current.Data.DatabaseDirectory);
+            return new SqliteConnectionFactory(path);
+        });
+        services.AddSingleton<DatabaseMigrator>();
+        services.AddSingleton<BatterySampleWriteQueue>();
+        services.AddSingleton<IBatterySampleWriteQueue>(sp => sp.GetRequiredService<BatterySampleWriteQueue>());
+        services.AddHostedService(sp => sp.GetRequiredService<BatterySampleWriteQueue>());
+        services.AddSingleton<PowerSampleWriteQueue>();
+        services.AddSingleton<IPowerSampleWriteQueue>(sp => sp.GetRequiredService<PowerSampleWriteQueue>());
+        services.AddHostedService(sp => sp.GetRequiredService<PowerSampleWriteQueue>());
+        services.AddSingleton<TemperatureSampleWriteQueue>();
+        services.AddSingleton<ITemperatureSampleWriteQueue>(sp => sp.GetRequiredService<TemperatureSampleWriteQueue>());
+        services.AddHostedService(sp => sp.GetRequiredService<TemperatureSampleWriteQueue>());
+        services.AddHostedService<DatabaseMaintenanceService>();
+        services.AddSingleton<IDatabaseDiagnosticsProvider, DatabaseDiagnosticsProvider>();
+        services.AddHostedService<BatteryPersistenceBridge>();
+
+        // Application services
+        services.AddSingleton<IThemeService, ThemeService>();
+        services.AddSingleton<INavigationService, NavigationService>();
+        services.AddSingleton<IWindowStateService, WindowStateService>();
+
+        // Windows
+        services.AddSingleton<MainWindow>();
+        services.AddSingleton<BatteryMessageWindow>();
+
+        // Battery monitoring (Phase 2)
+        services.AddSingleton<WinRtBatterySource>();
+        services.AddSingleton<WmiBatterySource>();
+        services.AddSingleton<IoctlBatterySource>();
+        services.AddSingleton<SystemPowerStatusSource>();
+        services.AddSingleton<IBatteryProvider, CompositeBatteryProvider>();
+        services.AddSingleton<IBatteryCapabilityDetector, BatteryCapabilityDetector>();
+        services.AddSingleton<BatteryMonitoringService>();
+        services.AddSingleton<IBatteryMonitoringService>(sp => sp.GetRequiredService<BatteryMonitoringService>());
+        services.AddHostedService(sp => sp.GetRequiredService<BatteryMonitoringService>());
+
+        // Sessions (Phase 4)
+        services.AddSingleton<ISessionStore, SessionStore>();
+        services.AddSingleton<SessionMonitoringService>();
+        services.AddSingleton<ISessionMonitoringService>(sp => sp.GetRequiredService<SessionMonitoringService>());
+        services.AddHostedService(sp => sp.GetRequiredService<SessionMonitoringService>());
+
+        // Power monitoring (Phase 5) — registered after Sessions so
+        // ISessionMonitoringService is available for the "session" chart window.
+        services.AddSingleton<PowerMonitoringService>();
+        services.AddSingleton<IPowerMonitoringService>(sp => sp.GetRequiredService<PowerMonitoringService>());
+        services.AddHostedService(sp => sp.GetRequiredService<PowerMonitoringService>());
+
+        // Temperature monitoring (Phase 6) — rides the battery monitor's readings,
+        // whose TemperatureCelsius field is already resolved S4 -> S3.
+        services.AddSingleton<ThermalMonitoringService>();
+        services.AddSingleton<ITemperatureMonitoringService>(sp => sp.GetRequiredService<ThermalMonitoringService>());
+        services.AddHostedService(sp => sp.GetRequiredService<ThermalMonitoringService>());
+
+        // View models
+        services.AddSingleton<ShellViewModel>();
+        services.AddTransient<SettingsViewModel>();
+        services.AddTransient<DiagnosticsViewModel>();
+        services.AddTransient<BatteryViewModel>();
+        services.AddTransient<SessionsViewModel>();
+        services.AddTransient<PowerViewModel>();
+        services.AddTransient<TemperatureViewModel>();
+        services.AddTransient<AboutViewModel>();
+    }
+
+    private void OnWindowClosed(object sender, WindowEventArgs args)
+    {
+        _ = sender;
+        _ = args;
+
+        Log.Information("Main window closed; shutting down.");
+        Shutdown();
+    }
+
+    private void Shutdown()
+    {
+        try
+        {
+            _host?.StopAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Host did not stop cleanly.");
+        }
+        finally
+        {
+            _host?.Dispose();
+            _host = null;
+            _messageWindow?.Dispose();
+            _messageWindow = null;
+            Log.CloseAndFlush();
+        }
+    }
+
+    private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    {
+        _ = sender;
+
+        // Log before the process dies. The exception is not swallowed: a fault
+        // this far up is not something the application can meaningfully continue
+        // through, and pretending otherwise would hide real defects.
+        Log.Fatal(e.Exception, "Unhandled exception: {Message}", e.Message);
+        Log.CloseAndFlush();
+    }
+}
