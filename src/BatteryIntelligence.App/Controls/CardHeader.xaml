@@ -7,9 +7,10 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <!-- 16px duotone-equivalent glyph + caps kicker, optional trailing action link. -->
+    <!-- 16px duotone-equivalent glyph + caps kicker, optional info tooltip, optional trailing action link. -->
     <Grid ColumnSpacing="8">
         <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="Auto" />
@@ -25,11 +26,28 @@
 
         <TextBlock
             Grid.Column="1"
+            VerticalAlignment="Center"
             Style="{StaticResource CardKickerTextStyle}"
             Text="{x:Bind Text, Mode=OneWay}" />
 
-        <HyperlinkButton
+        <FontIcon
             Grid.Column="2"
+            x:Name="InfoIcon"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Center"
+            FontSize="13"
+            Foreground="{ThemeResource AppText3Brush}"
+            Visibility="Collapsed"
+            Glyph="&#xE946;"
+            IsTapEnabled="True"
+            AutomationProperties.Name="More information">
+            <ToolTipService.ToolTip>
+                <ToolTip x:Name="InfoToolTip" MaxWidth="320" />
+            </ToolTipService.ToolTip>
+        </FontIcon>
+
+        <HyperlinkButton
+            Grid.Column="3"
             x:Name="ActionButton"
             Padding="0"
             Visibility="Collapsed"

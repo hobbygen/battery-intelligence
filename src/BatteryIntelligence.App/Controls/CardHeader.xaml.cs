@@ -17,6 +17,10 @@ public sealed partial class CardHeader : UserControl
         nameof(ActionText), typeof(string), typeof(CardHeader),
         new PropertyMetadata(string.Empty, OnActionTextChanged));
 
+    public static readonly DependencyProperty InfoProperty = DependencyProperty.Register(
+        nameof(Info), typeof(string), typeof(CardHeader),
+        new PropertyMetadata(string.Empty, OnInfoChanged));
+
     public CardHeader()
     {
         InitializeComponent();
@@ -43,12 +47,27 @@ public sealed partial class CardHeader : UserControl
         set => SetValue(ActionTextProperty, value);
     }
 
+    /// <summary>Optional one-sentence explanation shown on an ⓘ tooltip (docs/ui-navigation.md section 4).</summary>
+    public string Info
+    {
+        get => (string)GetValue(InfoProperty);
+        set => SetValue(InfoProperty, value);
+    }
+
     private static void OnActionTextChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         CardHeader header = (CardHeader)d;
         header.ActionButton.Visibility = string.IsNullOrEmpty(e.NewValue as string)
             ? Visibility.Collapsed
             : Visibility.Visible;
+    }
+
+    private static void OnInfoChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        CardHeader header = (CardHeader)d;
+        string info = e.NewValue as string ?? string.Empty;
+        header.InfoToolTip.Content = info;
+        header.InfoIcon.Visibility = string.IsNullOrEmpty(info) ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void OnActionClick(object sender, RoutedEventArgs e)

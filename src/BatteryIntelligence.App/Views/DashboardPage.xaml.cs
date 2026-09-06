@@ -18,6 +18,7 @@ public sealed partial class DashboardPage : Page
         Temperature = App.Services.GetRequiredService<TemperatureViewModel>();
         AppUsage = App.Services.GetRequiredService<AppUsageViewModel>();
         Insights = App.Services.GetRequiredService<InsightsViewModel>();
+        Statistics = App.Services.GetRequiredService<StatisticsViewModel>();
         _navigation = App.Services.GetRequiredService<INavigationService>();
         InitializeComponent();
 
@@ -31,6 +32,7 @@ public sealed partial class DashboardPage : Page
             Temperature.Dispose();
             AppUsage.Dispose();
             Insights.Dispose();
+            Statistics.Dispose();
         };
     }
 
@@ -52,12 +54,8 @@ public sealed partial class DashboardPage : Page
     /// <summary>Qualifying rule-based insights for the Smart Insights card.</summary>
     public InsightsViewModel Insights { get; }
 
-    private void OnViewBatteryDetailsClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
-    {
-        _ = sender;
-        _ = e;
-        _navigation.NavigateTo("Battery");
-    }
+    /// <summary>Today's aggregate usage for the Statistics card.</summary>
+    public StatisticsViewModel Statistics { get; }
 
     private void OnCardHeaderAction(object sender, System.EventArgs e)
     {
@@ -71,5 +69,40 @@ public sealed partial class DashboardPage : Page
         _ = sender;
         _ = e;
         _navigation.NavigateTo("AppUsage");
+    }
+
+    private void OnStatisticsCardAction(object sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        _navigation.NavigateTo("Statistics");
+    }
+
+    private void OnPowerCardAction(object sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        _navigation.NavigateTo("Power");
+    }
+
+    private void OnSessionsCardAction(object sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        _navigation.NavigateTo("Sessions");
+    }
+
+    private void OnTemperatureCardAction(object sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        _navigation.NavigateTo("Temperature");
+    }
+
+    private void OnAlertsCardAction(object sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        _navigation.NavigateTo("Alerts");
     }
 }

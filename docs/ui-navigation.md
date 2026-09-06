@@ -28,11 +28,12 @@ Shared type/card/badge styles are in `Resources/Styles.xaml`. New controls:
   was imported.
 - **Icons are Segoe Fluent Icons, not Phosphor duotone.** `FontIcon` glyphs map
   to the nearest Fluent equivalent per nav/card icon.
-- **Cards stack in a single column** rather than the design's
-  `repeat(auto-fit, minmax(430px, 1fr))` responsive grid — legible at every width
-  without a `WrapPanel`; multi-column reflow is a later polish item. Page
-  `ScrollViewer`s carry a horizontal-scroll fallback so nothing clips below the
-  minimum window size (spec §41).
+- **The Dashboard uses a custom `ColumnGrid` masonry panel** (Phase 10) for the
+  design's `repeat(auto-fit, minmax(430px, 1fr))` grid — 1 / 2 / 3 / 4 columns at
+  <700 / <1100 / <1600 / ≥1600 px (§3), cards flowing to the shortest column,
+  vertical scroll only. Other pages still stack in a single column with a
+  horizontal-scroll fallback below the minimum window size — a per-page grid is a
+  later polish item.
 - **Density (Comfortable / Compact)** is a stored setting and a Settings
   `Segmented`, but the padding swap applies on next launch, not live.
 - **Not built this pass** (each shows an honest "arrives in Phase N" state, never a

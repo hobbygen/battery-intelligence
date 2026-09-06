@@ -24,10 +24,15 @@ public sealed record HealthFactorRow(string Label, string WeightText, string Sco
 /// </remarks>
 public sealed partial class BatteryViewModel : ObservableObject, IDisposable
 {
+    private static readonly TimeSpan MinRefreshInterval = TimeSpan.FromSeconds(1);
+
     private readonly IBatteryMonitoringService _monitoring;
     private readonly IAnalyticsService _analytics;
     private readonly IRuntimeEstimationService _runtime;
     private readonly DispatcherQueue _dispatcher;
+
+    private DateTimeOffset _lastApplied = DateTimeOffset.MinValue;
+    private bool _refreshQueued;
 
     private bool _hasBattery;
     private string? _lastError;
@@ -243,8 +248,32 @@ public sealed partial class BatteryViewModel : ObservableObject, IDisposable
         _ = e;
 
         // Updated fires on the thread pool (IBatteryMonitoringService contract);
-        // every bound property must change on the UI thread.
-        _dispatcher.TryEnqueue(ApplySnapshot);
+        // every bound property must change on the UI thread, and no more than
+        // once a second regardless of the sampling rate (docs/monitoring-dataflow.md
+        // section 7; specification section 45).
+        _dispatcher.TryEnqueue(() => RequestApplySnapshot(force: false));
+    }
+
+    private void RequestApplySnapshot(bool force)
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        if (!force && now - _lastApplied < MinRefreshInterval)
+        {
+            if (!_refreshQueued)
+            {
+                _refreshQueued = true;
+                _dispatcher.TryEnqueue(DispatcherQueuePriority.Low, () =>
+                {
+                    _refreshQueued = false;
+                    RequestApplySnapshot(force: true);
+                });
+            }
+
+            return;
+        }
+
+        _lastApplied = now;
+        ApplySnapshot();
     }
 
     private void OnAnalyticsUpdated(object? sender, EventArgs e)

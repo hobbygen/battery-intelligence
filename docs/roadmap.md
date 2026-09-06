@@ -801,13 +801,63 @@ existed from earlier phases — **no migration**.
 
 ---
 
-## Phase 10 — Dashboard
+## Phase 10 — Dashboard (complete)
 
-**Deliverables:** all eight cards integrated, responsive grid, grade badges, info
-tooltips, empty/unavailable states per card, throttled 1 Hz update path.
+Not a new subsystem — finishing the Dashboard as a whole: the eighth card, a
+responsive grid, per-card info tooltips, and the last throttle.
 
-**Depends on:** 2, 4–9. **Exit:** dashboard correct at 1366×768 through 4K with no
-clipping; updates stay throttled regardless of sampling rate.
+**What shipped:**
+
+- `Controls/ColumnGrid` — a hand-written responsive masonry `Panel`: 1 / 2 / 3 / 4
+  equal-width columns by width (`Core.Layout.ResponsiveColumns.ForWidth` — the
+  pure, unit-tested breakpoint function: <700 / <1100 / <1600 / else), each card
+  placed in the currently shortest column so cards reflow without their text
+  shrinking (`ui-navigation.md` §3). Unbounded width (a vertical `ScrollViewer`)
+  falls back to 4 columns at a bounded column width.
+- `Controls/CardHeader` gained an optional `Info` string → a ⓘ `FontIcon` with a
+  `ToolTip` (`ui-navigation.md` §4; R-095). Empty by default, so every existing
+  use is unaffected.
+- `Views/DashboardPage.xaml` rebuilt: the single-column `StackPanel` inside a
+  horizontally-scrolling `ScrollViewer` (the earlier deviation) is replaced by
+  `ColumnGrid` inside a vertically-scrolling one. All seven existing cards move
+  in unchanged; the **eighth — a "Today" statistics card** — is added (bound to
+  the existing `StatisticsViewModel` at its Today window: on-battery / charging /
+  screen-on, with the honest "no sessions today" state). Every card header now
+  carries an `Info` tooltip and links to its full page; the Electric Power card's
+  "Current" keeps its Calculated badge, Health and App Usage keep their Estimated
+  badges. Subtitle updated.
+- `BatteryViewModel` — added the same 1 Hz coalescing the Power / Temperature /
+  App Usage view models already had (`MinRefreshInterval` + trailing-refresh
+  flag), so every dashboard view model is now explicitly throttled regardless of
+  the sampling rate (R-099).
+
+**Depends on:** 2, 4–9.
+
+**Exit criteria:**
+
+| Criterion | Result |
+|---|---|
+| Eight cards integrated | ✅ Battery Overview, Battery Health, Current Session, Electric Power, Temperature, Application Usage, Today (Statistics), Smart Insights |
+| Responsive 1366×768 → 4K, no clipping, no text shrink | ✅ `ResponsiveColumnsTests` (breakpoint table + degenerate widths); live: 3 columns at ~1280, reflows to 2 / 1 narrowing and 4 past ~1600, vertical scroll only |
+| Grade badges | ✅ Estimated on Health + App Usage, Calculated on Power/Current, Retention badge on the hero |
+| Info tooltips | ✅ every `CardHeader` on the dashboard has an `Info` line |
+| Empty / unavailable states per card | ✅ Temperature (unavailable), Current Session (no session), App Usage (loading), Smart Insights (suppressed), Today (no sessions) — each explains why |
+| Updates throttled regardless of sampling rate | ✅ every dashboard VM coalesces to 1 Hz; verified live with `PowerSampleSeconds = 1` |
+| Solution builds, Debug and Release | ✅ 0 errors, 0 warnings |
+| Unit + Simulation + Integration tests | ✅ 296 passing (220 + 33 + 43) |
+
+**Deviations from plan**
+
+- **`ColumnGrid` is a hand-written masonry `Panel`**, not `ItemsRepeater` +
+  `UniformGridLayout` or a CommunityToolkit `WrapPanel` — the cards are
+  heterogeneous hand-authored XAML, and a new UI package for one panel is not
+  worth it. `ForWidth` is pure and unit-tested; the arrange maths is verified
+  live.
+- **The hero card does not span multiple columns** — it sits in column 1 like any
+  other card. A column-spanning hero is a later refinement if 3–4 columns look
+  unbalanced.
+- **The Today card reuses `StatisticsViewModel`** at its default window rather
+  than a bespoke lightweight view model.
 
 ---
 

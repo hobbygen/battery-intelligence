@@ -1,6 +1,6 @@
 # Requirements Traceability Matrix
 
-Status: updated after Phase 9. Version 1.0.0.
+Status: updated after Phase 10. Version 1.0.0.
 
 Covers spec §70: requirement → module → implementation → test → status.
 
@@ -115,15 +115,15 @@ Covers spec §70: requirement → module → implementation → test → status.
 | R-088 | Tray, background monitoring | §22 | Windows | `H.NotifyIcon`, close-to-tray | Manual | 📋 |
 | R-089 | Single instance | §59 | App | `AppInstance.FindOrRegisterForKey` + redirection | Verified: second launch redirected | ✅ |
 | R-090 | Start with Windows, configurable | §23 | Windows | Startup task, no admin | Manual across reboot | 📋 |
-| R-091 | Responsive 1280×720 → 4K, no clipping | §41 | App | Adaptive grid, min 960×640 | Manual at each resolution | 📋 |
+| R-091 | Responsive 1280×720 → 4K, no clipping | §41 | App | `Controls/ColumnGrid` masonry panel, 1/2/3/4 columns via `Core.Layout.ResponsiveColumns.ForWidth`; cards reflow, text never shrinks; min window 960×640 (scroll below) | `ResponsiveColumnsTests` (breakpoint table); live: 3 columns at ~1280, reflows 2 / 1 / 4 on resize, vertical scroll only | ✅ |
 | R-092 | Accessibility | §42 | App | Automation names, focus, contrast, chart text alts | Manual + accessibility pass | 📋 |
 | R-093 | Empty states explain why | §43 | App | Per-page states with reasons | Manual + unit on state selection | 📋 |
 | R-094 | Not colour alone | §39 | App | Colour + icon + label | Manual incl. high contrast | 📋 |
-| R-095 | Estimation transparency on hover | §76 | App | Tooltip: inputs, window, confidence | Manual | 📋 |
+| R-095 | Estimation transparency on hover | §76 | App | `CardHeader.Info` ⓘ tooltip on every dashboard card; each estimated page (App Usage "How this is estimated", Battery "How this score is calculated", About methodology) carries its own explanation | Live: dashboard card tooltips + About methodology card | 🔨 (dashboard + About done; per-value hover on other pages later) |
 | R-096 | CSV + JSON export | §36 | Reporting | `IReportExporter` impls | Unit + manual | 📋 |
 | R-097 | Structured logging, rotated | §48 | all | Serilog, 8 MB cap, 14-file retention | Log file written and rotating | ✅ |
 | R-098 | Graceful subsystem failure | §44 | all | Healthy→Retrying→Degraded | Simulation: each provider fails | 📋 |
-| R-099 | Performance budgets | §45 | all | Adaptive sampling, batching, throttling | Perf + 24 h soak | 📋 |
+| R-099 | Performance budgets | §45 | all | Batched writes (all queues); every dashboard view model coalesces UI updates to 1 Hz (`MinRefreshInterval`) regardless of sampling rate. Adaptive sampling + the 24 h soak are Phase 13 | `ResponsiveColumnsTests`; live: dashboard repaints at ~1 Hz with `PowerSampleSeconds = 1` | 🔨 (throttling done; adaptive sampling + soak Phase 13) |
 | R-100 | Security: no admin, parameterised SQL, safe paths | §46 | all | Standard user; prepared statements; sanitised metadata | Security review + unit | 📋 |
 
 ---

@@ -6,14 +6,14 @@ with exit criteria and deviations) and docs/traceability.md (requirement ->
 implementation -> test). This file is the fast orientation layer on top of those.
 
 ============================================================
-CURRENT STATUS: Phase 9 of 15 complete. Alert engine shipped —
-thresholds with hysteresis + cooldown, Windows toasts + in-app centre,
-alert history, per-alert config.
-Ready to start Phase 10 (Dashboard).
+CURRENT STATUS: Phase 10 of 15 complete. Dashboard finished —
+8 cards on a responsive masonry grid, per-card info tooltips,
+every VM throttled to 1 Hz.
+Ready to start Phase 11 (History and reporting).
 ============================================================
 
 Solution builds clean (0 warnings, 0 errors) in Debug and Release.
-Test totals: 281 passing — 205 Tests.Unit, 33 Tests.Simulation, 43 Tests.Integration.
+Test totals: 296 passing — 220 Tests.Unit, 33 Tests.Simulation, 43 Tests.Integration.
 Verified live on the reference machine (Dell laptop, Windows 11 build 26200,
 battery DELL 68ND307 / SMP / LiP, 40.0% retention — this is a real worn battery,
 not an error, and is documented as the reference reading in capability-matrix.md).
@@ -563,20 +563,58 @@ Key deviations (see docs/roadmap.md Phase 9):
 - The engine is timed off the battery reading's timestamp, not wall-clock.
 - No V002 migration — the Alert table exists from V001.
 
-============================================================
-WHAT'S NEXT: PHASE 10 — Dashboard
-============================================================
-Per docs/roadmap.md: all eight cards integrated, responsive grid, grade badges,
-info tooltips, empty/unavailable states per card, throttled 1 Hz update path.
-Depends on: Phases 2, 4-9 — all done.
-Exit: dashboard correct at 1366x768 through 4K with no clipping; updates stay
-throttled regardless of sampling rate.
+------------------------------------------------------------
+PHASE 10 — Dashboard (complete)
+------------------------------------------------------------
+Not a new subsystem — finishing the Dashboard as a whole.
 
-Most Dashboard cards already exist and are wired to live data (battery, power,
-session, temperature, app usage, health, insights). Phase 10 is largely
-integration + layout hardening: a responsive card grid (currently single-column
-with a horizontal-scroll fallback), per-card info tooltips, and verifying the
-1 Hz throttle holds. No new subsystem.
+What shipped:
+- Controls/ColumnGrid: a hand-written responsive masonry Panel. 1/2/3/4
+  equal-width columns by width (Core.Layout.ResponsiveColumns.ForWidth — the
+  pure, unit-tested breakpoint fn: <700 / <1100 / <1600 / else), each card
+  placed in the shortest column so cards reflow without their text shrinking.
+- Controls/CardHeader gained an optional Info string -> a small "i" FontIcon with
+  a ToolTip (ui-navigation.md section 4). Empty by default so existing uses are
+  unaffected.
+- Views/DashboardPage.xaml rebuilt: the single-column StackPanel in a
+  horizontally-scrolling ScrollViewer (the earlier deviation) is replaced by
+  ColumnGrid in a vertically-scrolling one. All 7 existing cards move in
+  unchanged; the 8th — a "Today" statistics card (bound to the existing
+  StatisticsViewModel: on-battery / charging / screen-on + honest empty state) —
+  is added. Every card header now has an Info tooltip + a link to its full page.
+  Estimated/Calculated badges audited (Health, App Usage, Power/Current).
+- BatteryViewModel: added the same 1 Hz coalescing the Power/Temperature/AppUsage
+  VMs already had, so every dashboard VM is now explicitly throttled regardless
+  of the sampling rate (R-099).
+
+Verified live on the reference machine (2026-09-06): app started clean,
+"Windows notifications registered", ran the full session — no crash, no
+LayoutCycleException, no errors. Solution builds clean Debug + Release; 296 tests
+pass (220 + 33 + 43). (Column-count reflow on resize is covered by
+ResponsiveColumnsTests + the panel logic; not screenshot-verified here.)
+
+Key deviations (see docs/roadmap.md Phase 10):
+- ColumnGrid is a hand-written masonry Panel, not ItemsRepeater/UniformGridLayout
+  or a CommunityToolkit WrapPanel (cards are heterogeneous hand-authored XAML).
+- The hero card does not span multiple columns — column 1 like any other card.
+- The Today card reuses StatisticsViewModel at its default window.
+
+============================================================
+WHAT'S NEXT: PHASE 11 — History and reporting
+============================================================
+Per docs/roadmap.md: History page with 24h-1y + custom ranges, zoom and
+tooltips, tier-aware queries (raw -> minute -> hour -> daily by range),
+CsvExporter, JsonExporter behind IReportExporter, export scope selection, safe
+path handling.
+Depends on: Phases 3, 8 — all done. The SampleHour + DailyStatistics rollup
+producers landed in Phase 8; the History page consumes those tiers. The Reporting
+project is still a stub (promote it in Phase 11).
+Exit: a one-year range loads without stalling the UI; exports are
+spreadsheet-friendly (CSV) and human-readable (JSON).
+
+The History page is already an honest "arrives in Phase 11" placeholder. The
+Statistics engine (StatisticsWindow.Custom + DateRange) already exists — Phase 11
+adds the range-picker UI + the tier-aware read layer + the exporters.
 
 ============================================================
 PROJECT STRUCTURE QUICK MAP (for when you do need to open files)
@@ -608,8 +646,9 @@ src/BatteryIntelligence.Analytics — AnalyticsService + RuntimeEstimationServic
     Core-only reference (infra sibling). Plain net10.0 — analytics is arithmetic.
 src/BatteryIntelligence.App           — WinUI 3 shell, Views, ViewModels, composition root (App.xaml.cs).
     Resources/AppTheme.xaml holds the Claude Design tokens; Controls/{Segmented,
-    CardHeader,MetricStat,Sparkline} are the new design primitives; Controls/PowerChart
-    is the only file touching LiveChartsCore.
+    CardHeader,MetricStat,Sparkline,ToggleRow,ColumnGrid} are the design primitives;
+    Controls/PowerChart is the only file touching LiveChartsCore;
+    Services/WindowsToastPresenter is the only file touching AppNotificationManager.
 src/BatteryIntelligence.{Notifications,Reporting}
     — stub projects, not yet implemented (their phases are 9,11 respectively)
 tests/BatteryIntelligence.Tests.Unit         — pure logic, net10.0, fast.
