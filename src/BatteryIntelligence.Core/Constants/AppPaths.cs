@@ -31,12 +31,40 @@ public static class AppPaths
     /// <summary>
     /// Root data directory, created if it does not exist.
     /// </summary>
+    /// <remarks>
+    /// Resolved from the <c>LOCALAPPDATA</c> environment variable rather than the
+    /// <c>SpecialFolder</c> API. Both point at the same place for an unpackaged
+    /// app, but under MSIX the <c>SpecialFolder</c> lookup can be redirected into
+    /// the package's private <c>…\Packages\&lt;PFN&gt;\LocalCache</c> tree — which
+    /// would orphan an existing unpackaged user's database on upgrade. The
+    /// environment variable is never redirected, so the data location is
+    /// byte-identical packaged and unpackaged (specification section 58).
+    /// </remarks>
     public static string DataDirectory =>
-        EnsureDirectory(Path.Combine(
-            Environment.GetFolderPath(
-                Environment.SpecialFolder.LocalApplicationData,
-                Environment.SpecialFolderOption.Create),
-            FolderName));
+        EnsureDirectory(Path.Combine(LocalAppDataRoot(), FolderName));
+
+    private static string LocalAppDataRoot()
+    {
+        string? fromEnv = Environment.GetEnvironmentVariable("LOCALAPPDATA");
+        if (!string.IsNullOrWhiteSpace(fromEnv))
+        {
+            return fromEnv;
+        }
+
+        string fromApi = Environment.GetFolderPath(
+            Environment.SpecialFolder.LocalApplicationData,
+            Environment.SpecialFolderOption.Create);
+        if (!string.IsNullOrWhiteSpace(fromApi))
+        {
+            return fromApi;
+        }
+
+        // Last resort: compose it from the user profile, which is never redirected.
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "AppData",
+            "Local");
+    }
 
     /// <summary>Full path of the settings file.</summary>
     public static string SettingsFile => Path.Combine(DataDirectory, SettingsFileName);

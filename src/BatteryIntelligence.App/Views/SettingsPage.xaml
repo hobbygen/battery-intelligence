@@ -82,6 +82,24 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0" FontSize="19" Foreground="{ThemeResource AppAccentBrush}" Glyph="&#xE7B5;" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock FontSize="13.5" Text="Start when I sign in" />
+                                <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="Adds a per-user startup entry. No administrator rights are used." />
+                            </StackPanel>
+                            <ToggleSwitch
+                                Grid.Column="2"
+                                VerticalAlignment="Center"
+                                AutomationProperties.Name="Start when I sign in"
+                                IsOn="{x:Bind ViewModel.StartWithWindows, Mode=TwoWay}" />
+                        </Grid>
+
+                        <Grid Style="{StaticResource SettingRowGrid}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
                             <FontIcon Grid.Column="0" FontSize="19" Foreground="{ThemeResource AppAccentBrush}" Glyph="&#xE7C4;" />
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                 <TextBlock FontSize="13.5" Text="Keep running in the notification area" />

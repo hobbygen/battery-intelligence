@@ -22,23 +22,48 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly ISettingsService _settings;
     private readonly IThemeService _theme;
     private readonly IHistoryMaintenance _historyMaintenance;
+    private readonly IStartupService _startup;
     private readonly ILogger<SettingsViewModel> _logger;
 
     public SettingsViewModel(
         ISettingsService settings,
         IThemeService theme,
         IHistoryMaintenance historyMaintenance,
+        IStartupService startup,
         ILogger<SettingsViewModel> logger)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(theme);
         ArgumentNullException.ThrowIfNull(historyMaintenance);
+        ArgumentNullException.ThrowIfNull(startup);
         ArgumentNullException.ThrowIfNull(logger);
 
         _settings = settings;
         _theme = theme;
         _historyMaintenance = historyMaintenance;
+        _startup = startup;
         _logger = logger;
+    }
+
+    /// <summary>Whether Battery Intelligence launches when the user signs in (a per-user Run entry, no admin).</summary>
+    public bool StartWithWindows
+    {
+        get => _startup.IsEnabled();
+        set
+        {
+            if (value == _startup.IsEnabled())
+            {
+                return;
+            }
+
+            bool ok = _startup.SetEnabled(value);
+            if (ok)
+            {
+                _ = _settings.UpdateAsync(s => s.General.StartWithWindows = value, "General");
+            }
+
+            OnPropertyChanged();
+        }
     }
 
     /// <summary>The exact word the user must type to confirm deleting all history.</summary>

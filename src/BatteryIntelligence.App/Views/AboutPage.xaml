@@ -109,6 +109,32 @@
             </StackPanel>
 
             <StackPanel Spacing="10">
+                <TextBlock Style="{StaticResource CardKickerTextStyle}" Text="LIMITATIONS" />
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="10">
+                        <TextBlock
+                            Foreground="{ThemeResource AppText2Brush}"
+                            TextWrapping="Wrap"
+                            Text="Battery Intelligence never fabricates data. Keeping that promise means being plain about what it cannot know:" />
+                        <ItemsControl ItemsSource="{x:Bind ViewModel.Limitations}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <Grid Padding="0,4" ColumnSpacing="10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <FontIcon Grid.Column="0" VerticalAlignment="Top" FontSize="13" Foreground="{ThemeResource AppText3Brush}" Glyph="&#xE946;" />
+                                        <TextBlock Grid.Column="1" Foreground="{ThemeResource AppText2Brush}" TextWrapping="Wrap" Text="{x:Bind}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <StackPanel Spacing="10">
                 <TextBlock Style="{StaticResource CardKickerTextStyle}" Text="PRIVACY" />
                 <Border Style="{StaticResource CardBorderStyle}">
                     <Grid ColumnSpacing="14">

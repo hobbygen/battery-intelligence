@@ -274,6 +274,7 @@ public partial class App : Application
         services.AddHostedService<BatteryPersistenceBridge>();
 
         // Application services
+        services.AddSingleton<IStartupService, StartupService>();
         services.AddSingleton<IThemeService, ThemeService>();
         services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<IWindowStateService, WindowStateService>();

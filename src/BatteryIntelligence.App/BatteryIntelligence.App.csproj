@@ -14,11 +14,14 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
 
     <!--
-      Unpackaged for development: fast inner loop, no deployment step.
-      Phase 15 adds MSIX packaging for distribution (docs/roadmap.md).
-      Framework-dependent, because Windows App Runtime 1.8 is already present.
+      Unpackaged by default: fast inner loop, no deployment step, and the tested
+      distribution path for 1.0. A packaged MSIX build is opt-in with
+      -p:EnablePackaging=true (Package.appxmanifest + the block below) — see
+      docs/release.md. Framework-dependent: Windows App Runtime 1.8 is a
+      prerequisite either way.
     -->
-    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsPackageType Condition="'$(EnablePackaging)' != 'true'">None</WindowsPackageType>
+    <WindowsPackageType Condition="'$(EnablePackaging)' == 'true'">MSIX</WindowsPackageType>
     <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
 
     <!--
@@ -39,8 +42,29 @@
     <DefineConstants>$(DefineConstants);SIMULATION</DefineConstants>
   </PropertyGroup>
 
+  <!--
+    Packaged (MSIX) build only. -p:EnablePackaging=true pulls in the manifest and
+    turns on appx generation; signing is a separate step in docs/release.md.
+    The default (unpackaged) build never sees Package.appxmanifest.
+  -->
+  <PropertyGroup Condition="'$(EnablePackaging)' == 'true'">
+    <GenerateAppxPackageOnBuild>true</GenerateAppxPackageOnBuild>
+    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+    <AppxBundle>Never</AppxBundle>
+    <AppxAutoIncrementPackageRevision>false</AppxAutoIncrementPackageRevision>
+    <AppxSymbolPackageEnabled>false</AppxSymbolPackageEnabled>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(EnablePackaging)' == 'true'">
+    <AppxManifest Include="Package.appxmanifest">
+      <SubType>Designer</SubType>
+    </AppxManifest>
+  </ItemGroup>
+
   <ItemGroup>
     <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Never treat the MSIX manifest as content in an unpackaged build. -->
+    <None Remove="Package.appxmanifest" Condition="'$(EnablePackaging)' != 'true'" />
   </ItemGroup>
 
   <ItemGroup>

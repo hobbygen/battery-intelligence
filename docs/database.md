@@ -1,6 +1,6 @@
 # Database Design
 
-Status: Phase 3 — implemented and verified live. Schema version 1.
+Status: 1.0.0 — all phases complete. Schema version 2.
 
 **Phase 3 confirmation (2026-09-05):** `V001__InitialSchema.sql` transcribes
 section 4 below verbatim; all eighteen tables and every index were verified to

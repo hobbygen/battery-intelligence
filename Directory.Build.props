@@ -12,14 +12,21 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
+  <!--
+    Version single source of truth. To ship a new version bump BOTH this block
+    and the <Identity Version="…"> in src/BatteryIntelligence.App/Package.appxmanifest
+    (four-part, e.g. 1.1.0.0). See docs/release.md.
+  -->
   <PropertyGroup>
     <Product>Battery Intelligence</Product>
     <Company>Battery Intelligence</Company>
     <Authors>Battery Intelligence</Authors>
-    <Copyright>Copyright © 2026</Copyright>
+    <Copyright>Copyright © 2026 Battery Intelligence. MIT licensed.</Copyright>
     <Version>1.0.0</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
+    <InformationalVersion>1.0.0</InformationalVersion>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <NeutralLanguage>en-US</NeutralLanguage>
   </PropertyGroup>
 

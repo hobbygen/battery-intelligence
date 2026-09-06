@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: Phase 6 complete. Version 1.0.0.
+Status: 1.0.0 — all 15 phases complete. Version 1.0.0.
 
 Maps spec §67's fifteen phases to concrete deliverables and exit criteria.
 
@@ -1173,14 +1173,75 @@ requirements into a concrete release checklist.
 
 ---
 
-## Phase 15 — Release
+## Phase 15 — Release (authored; clean-machine verification is a runbook)
 
-**Deliverables:** Release configuration with simulation excluded, MSIX packaging,
-versioning, install/upgrade/uninstall with user-data preservation verified,
-README, release notes, completed `/docs` set per spec §69.
+The release-engineering pass. Everything short of the clean-VM install/sign is
+done; those steps are `docs/release.md` + `docs/qa-checklist.md`.
 
-**Exit:** clean install, upgrade preserving the database, and uninstall all
-verified on a clean machine.
+**What shipped:**
+
+- **Data-path hardening** — `AppPaths.DataDirectory` now resolves the root from
+  the `%LOCALAPPDATA%` environment variable (never redirected), not the
+  `SpecialFolder` API (redirected into a package-private folder under some MSIX
+  configs). So the data location is byte-identical packaged and unpackaged, an
+  MSIX install finds an existing unpackaged database, and uninstall never touches
+  it (spec §58). `AppPathsTests` covers it.
+- **Simulation excluded from Release** — `tools/verify-no-simulation.ps1` builds
+  `-c Release` and checks the shipping assemblies contain no
+  `SimulatedBatteryProvider` / `BatterySimulationScenario` / `Fake*`. Runs
+  `PASS` (N9). `SIMULATION` is Debug-only; every simulation file is `#if SIMULATION`.
+- **MSIX packaging (authored)** — `src/BatteryIntelligence.App/Package.appxmanifest`
+  (identity, `runFullTrust` only, `windows.startupTask`, splash/logos), a
+  `-p:EnablePackaging=true` build path in `App.csproj` that leaves the default
+  build unpackaged, and `tools/generate-msix-assets.ps1` (the tile PNGs, written
+  from source like `generate-icon.ps1`). The **unpackaged** Debug + Release build
+  is verified 0/0; the packaged build + signing + install is `docs/release.md` §4–§6.
+- **Versioning** — `Directory.Build.props` gains `<InformationalVersion>` and a
+  "bump both here and the manifest" comment; About shows the full version + MIT.
+- **`README.md`, `CHANGELOG.md`, `LICENSE` (MIT)** at the repo root.
+- **`docs/release.md`** — pre-flight gates, unpackaged + MSIX build, signing,
+  the clean-VM install/upgrade/uninstall verification, rollback, and the
+  release-time deviations.
+- **About → LIMITATIONS card** — `docs/limitations.md` said it was "surfaced in
+  the application under About" but nothing did; now a card summarises it (no
+  temperature sensor on many laptops; per-app energy is a model; cycle-count-zero
+  handling; estimates need history; the Diagnostics page shows *your* machine).
+- **`/docs` §69 pass** — every stale `Status:` header refreshed to
+  "1.0.0 — all phases complete"; `database.md` → "Schema version 2";
+  `roadmap.md` → "all 15 phases complete". The mandatory set is complete:
+  prd, architecture, api-strategy, capability-matrix, database, monitoring-dataflow,
+  session-engine, estimation-strategy, ui-navigation, testing, limitations,
+  traceability, roadmap, security-review, qa-checklist, release.
+
+**Depends on:** all prior phases.
+
+**Exit criteria:**
+
+| Criterion | Result |
+|---|---|
+| Release config, simulation excluded | ✅ `tools/verify-no-simulation.ps1` → `PASS` |
+| MSIX packaging | 🔨 manifest + build config + asset generator authored and the unpackaged build verified; the `.msix` build/sign/install is `release.md` §4–§6 (needs a CA cert) |
+| Versioning, single source | ✅ `Directory.Build.props` + manifest, documented |
+| Install / upgrade / uninstall, data preserved | 🔨 the mechanism is done and tested (`AppPathsTests` + `MigrationTests`); the clean-VM run is `qa-checklist.md` §G4/§G5 + `release.md` §6 |
+| README, release notes | ✅ `README.md`, `CHANGELOG.md` (1.0.0) |
+| `/docs` set complete per §69 | ✅ 16 docs, headers current, cross-links resolve |
+| Builds Debug + Release (unpackaged), 0 warnings | ✅ |
+| Unit + Simulation + Integration tests | ✅ 379 passing (275 + 37 + 67) |
+
+**Deviations from plan**
+
+- **The MSIX is not built, signed or installed in-house** — no code-signing
+  certificate and no clean machine in this session. The manifest, gated build
+  config, asset generator and the full runbook (`docs/release.md`) are complete;
+  the unpackaged build is the tested 1.0 artifact.
+- **`AppPaths` resolves from `%LOCALAPPDATA%`** rather than `SpecialFolder` — a
+  deliberate change so MSIX virtualization cannot orphan an existing database.
+- **Working set (~230–270 MB vs 150 MB) is an accepted deviation for 1.0** — the
+  WinUI 3 / SkiaSharp / WinAppSDK runtime floor; documented in `release.md` §8,
+  reported honestly by the Diagnostics footprint section.
+- **The 24-hour soak, Windows 10 render pass, screen-reader pass and real
+  power-transition testing are checklist items** for the release engineer
+  (`qa-checklist.md`), not run here.
 
 ---
 

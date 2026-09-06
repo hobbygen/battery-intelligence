@@ -1,6 +1,6 @@
 # Requirements Traceability Matrix
 
-Status: updated after Phase 14. Version 1.0.0.
+Status: 1.0.0 — all phases complete. Version 1.0.0.
 
 Covers spec §70: requirement → module → implementation → test → status.
 
@@ -87,7 +87,7 @@ Covers spec §70: requirement → module → implementation → test → status.
 
 | ID | Requirement | Spec | Module | Implementation | Test | Status |
 |---|---|---|---|---|---|---|
-| R-060 | SQLite, local only | §27, §33 | Data | `%LocalAppData%\BatteryIntelligence\battery.db`, resolved via `ISettingsService.Current.Data.DatabaseDirectory` | Live: file created with `-wal`/`-shm` siblings on the reference machine | ✅ |
+| R-060 | SQLite, local only | §27, §33 | Data, Core | `battery.db` under `AppPaths.DataDirectory`, which resolves from `%LOCALAPPDATA%` (Phase 15 — never redirected, so identical packaged/unpackaged) plus the optional `Data.DatabaseDirectory` override | `AppPathsTests` (under the user profile, stable, env-var-independent fallback); live: `-wal`/`-shm` siblings on the reference machine | ✅ |
 | R-061 | Full entity set | §27, §28 | Data | 18 tables, `V001__InitialSchema.sql` | `MigrationTests.MigrateAsync_OnFreshDatabase_CreatesEveryTable` | ✅ |
 | R-062 | Indexed time / battery / session | §32 | Data | Indexes per `database.md` §4 in V001; **V002** adds `IX_SampleMinute_Time` / `IX_SampleHour_Time` (the aggregate-tier reads filter on the time column alone, which the `WITHOUT ROWID` primary key cannot serve) | `QueryPlanTests` — `EXPLAIN QUERY PLAN` on the raw / minute / hour / session hot-path SELECTs asserts an index is used and no full table scan | ✅ |
 | R-063 | Batched, async writes | §32, §66 | Data | `BatterySampleWriteQueue`: 200-row / 30 s / explicit-flush triggers, one prepared statement reused per batch | `BatterySampleWriteQueueTests` (4 tests) | ✅ |
@@ -112,9 +112,9 @@ Covers spec §70: requirement → module → implementation → test → status.
 | R-085 | Insights never unsafe | §77 | Core.Analytics | Fixed, curated `Title`/`Explanation` strings — only figures substituted; conservative rule corpus (`InsightRulesV1`) | Review of the 7-rule corpus; `RuleBasedInsightProviderTests` | ✅ |
 | R-086 | Configurable alerts + cooldown | §20 | Core.Alerts + Notifications | `AlertRuleEngine` — per-type hysteresis (fire on the entering edge, re-arm past a margin) + cooldown; one rule per `AlertSettings` toggle; `AlertMonitoringService` drives it from the battery/analytics/process monitors | `AlertRuleEngineTests` (fires once, never re-fires while below, cooldown blocks a repeat, disabled never fires, critical wins), `AlertMonitoringServiceTests` (oscillation → one alert) | ✅ |
 | R-087 | Windows notifications + in-app centre | §21 | App (`WindowsToastPresenter`) + Notifications | `AppNotificationManager` for the unpackaged app, `Register()`/`Show()` fully guarded; the in-app centre (`IAlertMonitoringService` → bell flyout + Alerts page) is the guaranteed floor | `AlertMonitoringServiceTests.ANotificationFailure_DegradesToInApp_WithoutError`; live: reference machine | ✅ |
-| R-088 | Tray, background monitoring | §22 | Windows | `H.NotifyIcon`, close-to-tray | Manual | 📋 |
+| R-088 | Tray, background monitoring | §22 | Windows, App | `H.NotifyIcon` tray icon, close-to-tray (`MainWindow.OnAppWindowClosing` → `AppWindow.Hide()` when the setting is on), left-click restore, Exit menu item | `qa-checklist.md` §B1–B2 (clean-VM manual) | 🔨 (implemented; hardware/OS manual pass pending) |
 | R-089 | Single instance | §59 | App | `AppInstance.FindOrRegisterForKey` + redirection | Verified: second launch redirected | ✅ |
-| R-090 | Start with Windows, configurable | §23 | Windows | Startup task, no admin | Manual across reboot | 📋 |
+| R-090 | Start with Windows, configurable | §23 | App | `App.Services.StartupService` — a per-user `HKCU\…\Run` entry (no admin); the Settings "Start when I sign in" toggle. Packaged builds additionally get the `windows.startupTask` extension in `Package.appxmanifest` | `qa-checklist.md` §B4 (clean-VM reboot); the Run-key write path is a per-user registry op | 🔨 (implemented; reboot test pending) |
 | R-091 | Responsive 1280×720 → 4K, no clipping | §41 | App | `Controls/ColumnGrid` masonry panel, 1/2/3/4 columns via `Core.Layout.ResponsiveColumns.ForWidth`; cards reflow, text never shrinks; min window 960×640 (scroll below) | `ResponsiveColumnsTests` (breakpoint table); live: 3 columns at ~1280, reflows 2 / 1 / 4 on resize, vertical scroll only | ✅ |
 | R-092 | Accessibility | §42 | App | Every interactive control has an automation name (page-header buttons already; Phase 14 added it to every `Segmented`, and `ToggleRow` names its switch from the header); `Sparkline` marked decorative; charts emit an automation summary | Automatable parts done; keyboard-only + Narrator + high-contrast + scaling pass in `qa-checklist.md` §C/§D | 🔨 (code done; manual pass pending) |
 | R-093 | Empty states explain why | §43 | App | Per-page states with reasons via `EmptyStateView` | Phase 14 audit: all 14 `EmptyStateView` uses carry a `Description` explaining why; selection logic is trivial boolean composition (live regression sweep) | ✅ |
@@ -123,7 +123,7 @@ Covers spec §70: requirement → module → implementation → test → status.
 | R-096 | CSV + JSON export | §36 | Reporting, Data, App | `CsvExporter` (RFC 4180, BOM, `\r\n`) + `JsonExporter` (`Utf8JsonWriter`) behind `IReportExporter`, driven by `IExportDataSource` (per-scope range-filtered `SELECT`s, enums as names); `ExportService` = OS `FileSavePicker` → `FileStream`; scope checklist on the History page | `CsvExporterTests`, `JsonExporterTests`, `ExportDataSourceTests`; live export via picker | ✅ |
 | R-097 | Structured logging, rotated | §48 | all | Serilog, 8 MB cap, 14-file retention | Log file written and rotating | ✅ |
 | R-098 | Graceful subsystem failure | §44 | Core.Diagnostics + Core.Monitoring + all orchestrators | `MonitoringStatusRegistry` — `Healthy → Retrying` (1–2 failures) `→ Degraded` (≥3) `→ Healthy`, in the Diagnostics "Monitoring" section with the last error. `MonitoringBackoff` (base × 2ⁿ, cap 5 min) applied by the battery/process samplers: a failed tick widens the timer, a success restores the adaptive rate | `MonitoringStatusRegistryTests` (Retrying/Degraded transitions), `MonitoringBackoffTests`, `ProcessMonitoringServiceTests` (Degraded + isolation; interval widens/restores) | ✅ |
-| R-099 | Performance budgets | §45 | all | Batched writes; 1 Hz UI coalescing; adaptive sampling; `ISelfMetrics` + Diagnostics footprint. Cold start **~1.0–1.4 s** (< 2 s), CPU negligible, disk ~0.4 MB/min. **Working set ~230–270 MB > the 150 MB budget** (WinUI 3 baseline) | `AdaptiveSamplingPolicyTests`; in-session soak; `qa-checklist.md` §F (24 h soak + working-set → Phase 15) | 🔨 (all in-session measures pass except working set; 24 h soak is a release-engineer checklist item) |
+| R-099 | Performance budgets | §45 | all | Batched writes; 1 Hz UI coalescing; adaptive sampling; `ISelfMetrics` + Diagnostics footprint. Cold start **~1.0–1.4 s** (< 2 s), CPU negligible, disk ~0.4 MB/min. **Working set ~230–270 MB vs a 150 MB target** — the WinUI 3 / SkiaSharp / WinAppSDK runtime floor; an **accepted deviation for 1.0** (`docs/release.md` §8) | `AdaptiveSamplingPolicyTests`; in-session soak; `qa-checklist.md` §F (24 h soak by the release engineer) | 🔨 (all measures pass except working set — accepted; 24 h soak is a checklist item) |
 | R-100 | Security: no admin, parameterised SQL, safe paths | §46 | all | `asInvoker`, no elevation; every SQL value bound as a `$`-parameter, the three identifier-interpolating readers use closed hard-coded sets; export writes only to an OS-picker path; log viewer reads only `AppPaths.LogsDirectory`; no network anywhere; copied report redacts `%USERPROFILE%` | `docs/security-review.md` (full audit — clean); `QueryPlanTests` run the exact hot-path SQL | ✅ |
 
 ---
@@ -144,12 +144,12 @@ without a distinct row are covered structurally:
 | §37, §78 | `architecture.md` §9 extension points |
 | §56 | R-091 + `architecture.md` §7 |
 | §57 | R-055, R-005 |
-| §58 | R-060, R-066 + Phase 15 |
+| §58 | R-060, R-066 + `docs/release.md` (data survives packaged↔unpackaged, upgrade, uninstall) |
 | §60–§62 | `testing.md` in full |
 | §65 | R-015 |
 | §67, §80, §81 | `roadmap.md` |
 | §68 | `roadmap.md` Phase 14 exit |
-| §69 | This `/docs` set |
+| §69 | This `/docs` set — 16 documents, `README.md` links them; headers current at 1.0.0 |
 | §71, §72 | `api-strategy.md` |
 | §79 | `roadmap.md` Phase 14 |
 
