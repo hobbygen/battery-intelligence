@@ -127,11 +127,31 @@
             </StackPanel>
 
             <StackPanel Spacing="10">
+                <TextBlock Style="{StaticResource CardKickerTextStyle}" Text="LICENCES" />
+                <Border Style="{StaticResource CardBorderStyle}" Padding="0">
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.Licenses}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:LicenseRow">
+                                <Grid Padding="16,11" ColumnSpacing="14" BorderBrush="{ThemeResource AppLine2Brush}" BorderThickness="0,0,0,1">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Foreground="{ThemeResource AppText2Brush}" Text="{x:Bind Component}" />
+                                    <TextBlock Grid.Column="1" FontWeight="SemiBold" IsTextSelectionEnabled="True" Text="{x:Bind License}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+            </StackPanel>
+
+            <StackPanel Spacing="10">
                 <TextBlock Style="{StaticResource CardKickerTextStyle}" Text="ACKNOWLEDGEMENTS" />
                 <TextBlock
                     Foreground="{ThemeResource AppText2Brush}"
                     TextWrapping="Wrap"
-                    Text="Built with the Windows App SDK and WinUI 3. Charts render on SkiaSharp via LiveChartsCore. Battery capability detection uses the Windows power-management and ACPI interfaces only — no kernel driver is installed." />
+                    Text="Built with the Windows App SDK and WinUI 3. Charts render on SkiaSharp via LiveChartsCore. Battery capability detection uses the Windows power-management and ACPI interfaces only — no kernel driver is installed. Full licence texts ship with the distributed package." />
             </StackPanel>
 
             <TextBlock

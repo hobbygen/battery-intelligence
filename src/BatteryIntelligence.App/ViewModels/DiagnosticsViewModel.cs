@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using BatteryIntelligence.Core.Constants;
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Interfaces;
 using BatteryIntelligence.Core.Models;
@@ -24,6 +26,13 @@ public sealed record DiagnosticEntry(string Feature, string Status, string Sourc
 /// <param name="Entries">Rows in the group.</param>
 public sealed record DiagnosticSection(string Title, IReadOnlyList<DiagnosticEntry> Entries);
 
+/// <summary>One line in the Diagnostics log viewer.</summary>
+/// <param name="Time">Local time, short form.</param>
+/// <param name="Level">Normalised level (INFO, WARNING, …).</param>
+/// <param name="Text">The message.</param>
+/// <param name="LevelBrushKey">Theme brush resource key for the level chip.</param>
+public sealed record LogRow(string Time, string Level, string Text, string LevelBrushKey);
+
 /// <summary>
 /// Backs the Diagnostics page.
 /// </summary>
@@ -37,40 +46,57 @@ public sealed record DiagnosticSection(string Title, IReadOnlyList<DiagnosticEnt
 /// </remarks>
 public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
 {
+    private static readonly string[] LogLevelFilters = ["All", "Info and above", "Warnings and above", "Errors only"];
+    private static readonly string[] LevelOrder = ["TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "FATAL"];
+
     private readonly ILogger<DiagnosticsViewModel> _logger;
     private readonly IBatteryMonitoringService _monitoring;
     private readonly IDatabaseDiagnosticsProvider _databaseDiagnostics;
     private readonly IAlertMonitoringService _alerts;
     private readonly IHistoryReadStore _history;
+    private readonly IMonitoringStatusRegistry _status;
+    private readonly ILogReader _logReader;
     private readonly DispatcherQueue _dispatcher;
     private readonly IReadOnlyList<DiagnosticSection> _staticSections;
     private IReadOnlyList<DiagnosticSection> _sections;
     private string _summaryLine = "Running capability checks…";
+
+    private IReadOnlyList<LogEntry> _allLogEntries = [];
+    private IReadOnlyList<LogRow> _logRows = [];
+    private int _selectedLogLevelIndex;
 
     public DiagnosticsViewModel(
         ILogger<DiagnosticsViewModel> logger,
         IBatteryMonitoringService monitoring,
         IDatabaseDiagnosticsProvider databaseDiagnostics,
         IAlertMonitoringService alerts,
-        IHistoryReadStore history)
+        IHistoryReadStore history,
+        IMonitoringStatusRegistry status,
+        ILogReader logReader)
     {
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(monitoring);
         ArgumentNullException.ThrowIfNull(databaseDiagnostics);
         ArgumentNullException.ThrowIfNull(alerts);
         ArgumentNullException.ThrowIfNull(history);
+        ArgumentNullException.ThrowIfNull(status);
+        ArgumentNullException.ThrowIfNull(logReader);
 
         _logger = logger;
         _monitoring = monitoring;
         _databaseDiagnostics = databaseDiagnostics;
         _alerts = alerts;
         _history = history;
+        _status = status;
+        _logReader = logReader;
         _dispatcher = DispatcherQueue.GetForCurrentThread();
         _staticSections = BuildSections();
         _sections = _staticSections;
 
         _monitoring.Updated += OnMonitoringUpdated;
+        _status.Changed += OnMonitoringUpdated;
         _ = RebuildSectionsAsync();
+        _ = LoadLogsAsync();
     }
 
     /// <summary>Diagnostic groups shown on the page.</summary>
@@ -87,7 +113,107 @@ public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _summaryLine, value);
     }
 
-    public void Dispose() => _monitoring.Updated -= OnMonitoringUpdated;
+    /// <summary>Log-level filter options for the log viewer.</summary>
+    public IReadOnlyList<string> LogLevelOptions => LogLevelFilters;
+
+    /// <summary>Selected index into <see cref="LogLevelOptions"/>.</summary>
+    public int SelectedLogLevelIndex
+    {
+        get => _selectedLogLevelIndex;
+        set
+        {
+            if (SetProperty(ref _selectedLogLevelIndex, value))
+            {
+                ApplyLogFilter();
+            }
+        }
+    }
+
+    /// <summary>The recent log lines matching the current filter, oldest first.</summary>
+    public IReadOnlyList<LogRow> LogRows
+    {
+        get => _logRows;
+        private set
+        {
+            if (SetProperty(ref _logRows, value))
+            {
+                OnPropertyChanged(nameof(HasLogRows));
+                OnPropertyChanged(nameof(NoLogRows));
+            }
+        }
+    }
+
+    /// <summary>Whether any log lines are shown.</summary>
+    public bool HasLogRows => _logRows.Count > 0;
+
+    /// <summary>Inverse of <see cref="HasLogRows"/>, for the empty state.</summary>
+    public bool NoLogRows => _logRows.Count == 0;
+
+    /// <summary>The folder the log files live in, shown under the viewer.</summary>
+    public string LogDirectoryLine => $"Log files: {_logReader.LogDirectory}";
+
+    [RelayCommand]
+    private async Task RefreshLogsAsync() => await LoadLogsAsync().ConfigureAwait(true);
+
+    [RelayCommand]
+    private void OpenLogFolder()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = _logReader.LogDirectory,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not open the log folder.");
+        }
+    }
+
+    public void Dispose()
+    {
+        _monitoring.Updated -= OnMonitoringUpdated;
+        _status.Changed -= OnMonitoringUpdated;
+    }
+
+    private async Task LoadLogsAsync()
+    {
+        IReadOnlyList<LogEntry> entries = await _logReader.ReadRecentAsync(300).ConfigureAwait(true);
+        _allLogEntries = entries;
+        ApplyLogFilter();
+    }
+
+    private void ApplyLogFilter()
+    {
+        int minRank = _selectedLogLevelIndex switch
+        {
+            1 => Array.IndexOf(LevelOrder, "INFO"),
+            2 => Array.IndexOf(LevelOrder, "WARNING"),
+            3 => Array.IndexOf(LevelOrder, "ERROR"),
+            _ => 0,
+        };
+
+        LogRows =
+        [
+            .. _allLogEntries
+                .Where(e => Array.IndexOf(LevelOrder, e.Level) >= minRank)
+                .Select(e => new LogRow(
+                    e.TimestampLocal?.ToString("HH:mm:ss", CultureInfo.InvariantCulture) ?? "—",
+                    e.Level,
+                    e.Text,
+                    LevelBrushKey(e.Level))),
+        ];
+    }
+
+    private static string LevelBrushKey(string level) => level switch
+    {
+        "WARNING" => "AppWarnBrush",
+        "ERROR" or "FATAL" => "AppCritBrush",
+        _ => "AppText3Brush",
+    };
 
     private void OnMonitoringUpdated(object? sender, EventArgs e)
     {
@@ -104,6 +230,7 @@ public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
         Sections =
         [
             .. _staticSections,
+            BuildMonitoringSection(_status.Snapshot()),
             BuildStorageSection(database, historyExtent),
             new DiagnosticSection("Alerts", [
                 new DiagnosticEntry(
@@ -144,6 +271,37 @@ public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
             _logger.LogWarning(ex, "Could not read database diagnostics.");
             return new DatabaseDiagnostics(false, AppPaths.DataDirectory, 0, 0, null, null, 0);
         }
+    }
+
+    /// <summary>
+    /// Per-subsystem health (specification section 26; R-098). Every hosted
+    /// orchestrator reports its tick outcomes to <see cref="IMonitoringStatusRegistry"/>.
+    /// </summary>
+    private static DiagnosticSection BuildMonitoringSection(IReadOnlyList<MonitoringStatus> statuses)
+    {
+        List<DiagnosticEntry> entries = [.. statuses.Select(s => new DiagnosticEntry(
+            s.Component.Describe(),
+            s.Health switch
+            {
+                MonitoringHealth.Healthy => "Healthy",
+                MonitoringHealth.Degraded => $"Degraded — {s.LastError}",
+                _ => "Starting…",
+            },
+            DescribeActivity(s)))];
+
+        return new DiagnosticSection("Monitoring", entries);
+    }
+
+    private static string DescribeActivity(MonitoringStatus status)
+    {
+        if (status.Health == MonitoringHealth.Degraded && status.LastFailureUtc is DateTimeOffset failed)
+        {
+            return $"{status.ConsecutiveFailures} consecutive failures; last {DescribeAgo(failed)}";
+        }
+
+        return status.LastSuccessUtc is DateTimeOffset ok
+            ? $"Last activity {DescribeAgo(ok)}"
+            : "No tick yet";
     }
 
     private async Task<string> SafeGetHistoryExtentAsync()
@@ -308,8 +466,15 @@ public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
                 builder.AppendLine();
             }
 
+            // The report is meant to be shared (specification section 46 / R-100):
+            // the user-profile path is the only personal data in it, so redact it.
+            string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            string report = string.IsNullOrEmpty(userProfile)
+                ? builder.ToString()
+                : builder.ToString().Replace(userProfile, "%USERPROFILE%", StringComparison.OrdinalIgnoreCase);
+
             DataPackage package = new();
-            package.SetText(builder.ToString());
+            package.SetText(report);
             Clipboard.SetContent(package);
 
             _logger.LogInformation("Diagnostics copied to the clipboard.");

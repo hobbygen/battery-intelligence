@@ -1,3 +1,4 @@
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Notifications;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -118,7 +119,8 @@ public sealed class AlertMonitoringServiceTests
                 store,
                 presenter,
                 settings,
-                NullLogger<AlertMonitoringService>.Instance);
+                NullLogger<AlertMonitoringService>.Instance,
+                new MonitoringStatusRegistry());
 
             await service.StartAsync(CancellationToken.None);
             return new Harness { Service = service, Battery = battery, Store = store, Presenter = presenter, Settings = settings };

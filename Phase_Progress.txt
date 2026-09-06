@@ -6,15 +6,15 @@ with exit criteria and deviations) and docs/traceability.md (requirement ->
 implementation -> test). This file is the fast orientation layer on top of those.
 
 ============================================================
-CURRENT STATUS: Phase 11 of 15 complete. History and reporting
-finished — tier-aware History page (24h-1y, zoom, adaptive axis),
-CSV + JSON export behind IReportExporter, "delete all history" in
-Settings. Reporting project promoted from its stub.
-Ready to start Phase 12 (Diagnostics).
+CURRENT STATUS: Phase 12 of 15 complete. Diagnostics finished —
+per-subsystem Monitoring section (MonitoringStatusRegistry, all 8
+orchestrators report), in-app log viewer, About licences card,
+"Copy report" redacts the user-profile path.
+Ready to start Phase 13 (Optimisation).
 ============================================================
 
 Solution builds clean (0 warnings, 0 errors) in Debug and Release.
-Test totals: 330 passing — 244 Tests.Unit, 33 Tests.Simulation, 53 Tests.Integration.
+Test totals: 342 passing — 255 Tests.Unit, 34 Tests.Simulation, 53 Tests.Integration.
 Verified live on the reference machine (Dell laptop, Windows 11 build 26200,
 battery DELL 68ND307 / SMP / LiP, 40.0% retention — this is a real worn battery,
 not an error, and is documented as the reference reading in capability-matrix.md).
@@ -661,17 +661,61 @@ Key deviations (see docs/roadmap.md Phase 11):
 - ExportService resolves the shell window via App.ShellWindow at call time.
 - No V002 migration — every table used exists verbatim from V001.
 
+PHASE 12 — Diagnostics (complete)
+------------------------------------------------------------
+Finishing the Diagnostics/About surface. The capability matrix, DB stats,
+"Copy report", and About versions/privacy/methodology were already in place;
+this phase added the two missing deliverables + a licence list + redaction.
+
+What shipped:
+- Core.Diagnostics.MonitoringStatusRegistry (IMonitoringStatusRegistry): a
+  thread-safe singleton every hosted orchestrator reports each tick's outcome to.
+  MonitoringComponent { Battery, Power, Temperature, ApplicationUsage, Sessions,
+  Analytics, Alerts, Database }; MonitoringHealth { Starting, Healthy, Degraded }
+  — Degraded after 3 consecutive failures, Healthy again on the next success.
+  Changed fires only on a rendered-state change. Pure, unit-tested.
+- Wired all 8 orchestrators: one ctor arg + a ReportSuccess/ReportFailure call
+  beside each existing "LastError = ..." line. SessionMonitoringService and
+  DatabaseMaintenanceService (rollup + retention) gained the tick-error tracking
+  they lacked (via a local tickError, since they swallow per-item exceptions).
+- Core.Diagnostics.LogLineParser + LogEntry: parses the Serilog file output
+  template into typed entries, folds exception/continuation lines into the entry
+  above, normalises levels (INF->INFO, FTL->FATAL). ILogReader (Core) /
+  Services/LogFileReader (App) reads the newest app-*.log with FileShare.ReadWrite,
+  last N entries, never throws.
+- DiagnosticsViewModel: a "Monitoring" section (reuses the DiagnosticSection
+  renderer), rebuilt on IMonitoringStatusRegistry.Changed; a "Recent activity"
+  log viewer (level Segmented filter, Refresh, Open log folder); CopyDiagnostics
+  redacts the user-profile path to %USERPROFILE% (R-100 / spec §46).
+- DiagnosticsPage.xaml: "Recent activity" card (monospace, MaxHeight 380 scroll,
+  level colour via AppWarnBrush/AppCritBrush).
+- About page: a LICENCES card (WinAppSDK, CommunityToolkit.Mvvm, Serilog,
+  LiveChartsCore, SkiaSharp, H.NotifyIcon, Microsoft.Data.Sqlite + licences).
+
+Verified live on the reference machine (2026-09-06): app launched with the
+startup page forced to Diagnostics — started clean, no crash, no LayoutCycle, no
+warnings/errors across a 65 s run; the Diagnostics page (which now builds the
+Monitoring section from the registry and loads the log file) rendered fine.
+Builds clean Debug + Release; 342 tests pass (255 + 34 + 53). Copy-report
+redaction and Open-folder are code-complete but not click-verified.
+
+Key deviations (see docs/roadmap.md Phase 12):
+- Two health states (Healthy/Degraded) + Starting, not the three of
+  monitoring-dataflow.md §8 — the Retrying/backoff layer isn't built (services
+  retry at their fixed cadence); it's Phase 13's adaptive-sampling work.
+- Degraded = a fixed >=3 consecutive tick failures.
+- Log viewer reads the current file only; the folder button opens the rest.
+- Copy report redacts only the user-profile path prefix.
+
 ============================================================
-WHAT'S NEXT: PHASE 12 — Diagnostics
+WHAT'S NEXT: PHASE 13 — Optimisation
 ============================================================
-Per docs/roadmap.md: live capability matrix rendering, monitoring state per
-subsystem with last error, database statistics, log viewer, "Copy diagnostics",
-About page with versions/licenses/privacy/estimation methodology.
-Depends on: all prior phases — done. Much of the Diagnostics page already exists
-(system/app/storage/battery/alerts sections, Copy diagnostics, History extent);
-Phase 12 adds per-subsystem monitoring state + last error, and a log viewer.
-Exit: every unavailable capability visible with its reason; copied diagnostics
-contain no personal data.
+Per docs/roadmap.md: measure against monitoring-dataflow.md §1 budgets (CPU,
+working set, disk writes, query timings, chart frame times, startup time), then
+targeted fixes; a 24-hour soak. This is also where the Retrying/exponential-
+backoff layer for R-098 and the adaptive-sampling back-off land.
+Exit: all budgets met; no leaks over 24 h; no frame > 16 ms attributable to
+monitoring.
 
 ============================================================
 PROJECT STRUCTURE QUICK MAP (for when you do need to open files)
@@ -679,6 +723,8 @@ PROJECT STRUCTURE QUICK MAP (for when you do need to open files)
 src/BatteryIntelligence.Core          — domain, zero dependencies, net10.0 (no -windows).
     Includes Core.Sessions.SessionStateMachine (pure) despite the name overlap
     with the Sessions project — see Phase 4 deviations above.
+    Core.Diagnostics (Phase 12): MonitoringStatusRegistry (all 8 orchestrators
+    report tick outcomes here), LogLineParser + LogEntry (Serilog file parsing).
 src/BatteryIntelligence.Windows       — Win32/WinRT interop, message window
     (now emits Suspended/Resumed/ScreenStateChanged/LockStateChanged too)
 src/BatteryIntelligence.Battery       — providers, capability detection, monitoring service
@@ -712,7 +758,8 @@ src/BatteryIntelligence.App           — WinUI 3 shell, Views, ViewModels, comp
     CardHeader,MetricStat,Sparkline,ToggleRow,ColumnGrid} are the design primitives;
     Controls/PowerChart is the only file touching LiveChartsCore;
     Services/WindowsToastPresenter is the only file touching AppNotificationManager;
-    Services/ExportService is the only file touching the file-save picker.
+    Services/ExportService is the only file touching the file-save picker;
+    Services/LogFileReader (Phase 12) is the only file reading the Serilog files.
     Data-side history reads: Data/HistoryReadStore, Data/ExportDataSource,
     Data/HistoryMaintenance (Phase 11).
 tests/BatteryIntelligence.Tests.Unit         — pure logic, net10.0, fast.

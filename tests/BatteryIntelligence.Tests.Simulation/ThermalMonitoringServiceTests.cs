@@ -1,5 +1,6 @@
 using BatteryIntelligence.Battery.Simulation;
 using BatteryIntelligence.Core.Configuration;
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Interfaces;
 using BatteryIntelligence.Core.Models;
@@ -87,7 +88,7 @@ public sealed class ThermalMonitoringServiceTests
         FakeSettings settings = new();
         settings.Current.Alerts.HighTemperatureCelsius = warnCelsius;
         return new ThermalMonitoringService(
-            battery, new FakeSessions(), queue, settings, NullLogger<ThermalMonitoringService>.Instance);
+            battery, new FakeSessions(), queue, settings, NullLogger<ThermalMonitoringService>.Instance, new MonitoringStatusRegistry());
     }
 
     private static BatterySnapshot Frame(string id, DateTimeOffset ts, BatteryState state, double? temperatureCelsius)

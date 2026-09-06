@@ -1,4 +1,5 @@
 using BatteryIntelligence.Core.Configuration;
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Interfaces;
 using BatteryIntelligence.Core.Models;
@@ -37,6 +38,7 @@ public sealed class ProcessMonitoringService : IProcessMonitoringService, IHoste
     private readonly IProcessSampleWriteQueue _writeQueue;
     private readonly ISettingsService _settings;
     private readonly ILogger<ProcessMonitoringService> _logger;
+    private readonly IMonitoringStatusRegistry _status;
 
     private readonly Lock _sync = new();
     private readonly Dictionary<(int Pid, long StartTicks), (TimeSpan Cpu, DateTimeOffset At)> _previousCpu = [];
@@ -62,7 +64,8 @@ public sealed class ProcessMonitoringService : IProcessMonitoringService, IHoste
         ISessionMonitoringService sessions,
         IProcessSampleWriteQueue writeQueue,
         ISettingsService settings,
-        ILogger<ProcessMonitoringService> logger)
+        ILogger<ProcessMonitoringService> logger,
+        IMonitoringStatusRegistry status)
     {
         ArgumentNullException.ThrowIfNull(enumerator);
         ArgumentNullException.ThrowIfNull(battery);
@@ -70,6 +73,7 @@ public sealed class ProcessMonitoringService : IProcessMonitoringService, IHoste
         ArgumentNullException.ThrowIfNull(writeQueue);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(status);
 
         _enumerator = enumerator;
         _battery = battery;
@@ -77,6 +81,7 @@ public sealed class ProcessMonitoringService : IProcessMonitoringService, IHoste
         _writeQueue = writeQueue;
         _settings = settings;
         _logger = logger;
+        _status = status;
     }
 
     /// <inheritdoc/>
@@ -151,6 +156,7 @@ public sealed class ProcessMonitoringService : IProcessMonitoringService, IHoste
             IReadOnlyList<ProcessRawSample> raw = _enumerator.Enumerate();
             bool published = Ingest(raw, now);
             LastError = null;
+            _status.ReportSuccess(MonitoringComponent.ApplicationUsage);
             if (published)
             {
                 Updated?.Invoke(this, EventArgs.Empty);
@@ -159,6 +165,7 @@ public sealed class ProcessMonitoringService : IProcessMonitoringService, IHoste
         catch (Exception ex)
         {
             LastError = ex.Message;
+            _status.ReportFailure(MonitoringComponent.ApplicationUsage, ex.Message);
             _logger.LogWarning(ex, "Process sampling tick failed.");
         }
     }

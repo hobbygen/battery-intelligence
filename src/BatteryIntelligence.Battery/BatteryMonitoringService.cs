@@ -1,5 +1,6 @@
 using BatteryIntelligence.Core.Battery;
 using BatteryIntelligence.Core.Configuration;
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Interfaces;
 using BatteryIntelligence.Core.Models;
@@ -30,6 +31,7 @@ public sealed class BatteryMonitoringService : IBatteryMonitoringService, IHoste
     private readonly ISettingsService _settings;
     private readonly BatteryMessageWindow? _messageWindow;
     private readonly ILogger<BatteryMonitoringService> _logger;
+    private readonly IMonitoringStatusRegistry _status;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
     private Timer? _timer;
@@ -44,17 +46,20 @@ public sealed class BatteryMonitoringService : IBatteryMonitoringService, IHoste
         IBatteryCapabilityDetector capabilityDetector,
         ISettingsService settings,
         ILogger<BatteryMonitoringService> logger,
+        IMonitoringStatusRegistry status,
         BatteryMessageWindow? messageWindow = null)
     {
         ArgumentNullException.ThrowIfNull(provider);
         ArgumentNullException.ThrowIfNull(capabilityDetector);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(status);
 
         _provider = provider;
         _capabilityDetector = capabilityDetector;
         _settings = settings;
         _logger = logger;
+        _status = status;
         _messageWindow = messageWindow;
     }
 
@@ -138,12 +143,14 @@ public sealed class BatteryMonitoringService : IBatteryMonitoringService, IHoste
             _currentSnapshots = snapshots;
             Aggregate = BatteryAggregation.Aggregate(snapshots, DateTimeOffset.UtcNow);
             LastError = null;
+            _status.ReportSuccess(MonitoringComponent.Battery);
         }
         catch (Exception ex)
         {
             // A read failure must not stop monitoring — the next timer tick or
             // notification tries again (specification section 44).
             LastError = ex.Message;
+            _status.ReportFailure(MonitoringComponent.Battery, ex.Message);
             _logger.LogWarning(ex, "Battery read failed.");
         }
         finally

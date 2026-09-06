@@ -1,6 +1,6 @@
 # Requirements Traceability Matrix
 
-Status: updated after Phase 11. Version 1.0.0.
+Status: updated after Phase 12. Version 1.0.0.
 
 Covers spec §70: requirement → module → implementation → test → status.
 
@@ -16,7 +16,7 @@ Covers spec §70: requirement → module → implementation → test → status.
 | R-002 | Never present estimated as measured | §3, §66 | Core, App | Named factories + `Worst` grade propagation | `Combine_OfTwoMeasured_YieldsCalculated_NotMeasured` | ✅ |
 | R-003 | Never show fake zeros | §3, §43 | Core, App | Nullable `Measurement<T>.Value`; `EmptyStateView` | `Unavailable_IsNotZero` | ✅ |
 | R-004 | Capability detection at startup and resume | §26, §72 | Battery | `BatteryCapabilityDetector` → `CapabilitySnapshot`; re-run on `WM_DEVICECHANGE` | `BatteryCapabilityDetectorTests` (present/absent sensors, no-battery, provider failure) | ✅ |
-| R-005 | Diagnostics page mandatory | §26, §47 | App | `DiagnosticsPage` renders live matrix incl. every Unavailable row | Manual, verified on reference machine (screenshot 2026-09-05) | ✅ |
+| R-005 | Diagnostics page mandatory | §26, §47 | App | `DiagnosticsPage`: live capability matrix (every Unavailable row with its reason), storage stats, per-subsystem **Monitoring** section, **Recent activity** log viewer, "Copy report" (user-profile path redacted) | Manual, verified on reference machine (Phase 12: Monitoring + log viewer render, no crash) | ✅ |
 
 ## Architecture
 
@@ -122,9 +122,9 @@ Covers spec §70: requirement → module → implementation → test → status.
 | R-095 | Estimation transparency on hover | §76 | App | `CardHeader.Info` ⓘ tooltip on every dashboard card; each estimated page (App Usage "How this is estimated", Battery "How this score is calculated", About methodology) carries its own explanation | Live: dashboard card tooltips + About methodology card | 🔨 (dashboard + About done; per-value hover on other pages later) |
 | R-096 | CSV + JSON export | §36 | Reporting, Data, App | `CsvExporter` (RFC 4180, BOM, `\r\n`) + `JsonExporter` (`Utf8JsonWriter`) behind `IReportExporter`, driven by `IExportDataSource` (per-scope range-filtered `SELECT`s, enums as names); `ExportService` = OS `FileSavePicker` → `FileStream`; scope checklist on the History page | `CsvExporterTests`, `JsonExporterTests`, `ExportDataSourceTests`; live export via picker | ✅ |
 | R-097 | Structured logging, rotated | §48 | all | Serilog, 8 MB cap, 14-file retention | Log file written and rotating | ✅ |
-| R-098 | Graceful subsystem failure | §44 | all | Healthy→Retrying→Degraded | Simulation: each provider fails | 📋 |
+| R-098 | Graceful subsystem failure | §44 | Core.Diagnostics + all orchestrators | `IMonitoringStatusRegistry` / `MonitoringStatusRegistry` — every hosted orchestrator reports each tick; `Healthy → Degraded` (≥3 consecutive failures) → `Healthy`, surfaced in the Diagnostics "Monitoring" section with the last error. `Retrying`/backoff layer deferred to Phase 13 (see roadmap.md Phase 12 deviations) | `MonitoringStatusRegistryTests`; `ProcessMonitoringServiceTests` (enumerator throws → ApplicationUsage Degraded, others unaffected, recovers) | 🔨 (state surface done; retry/backoff Phase 13) |
 | R-099 | Performance budgets | §45 | all | Batched writes (all queues); every dashboard view model coalesces UI updates to 1 Hz (`MinRefreshInterval`) regardless of sampling rate. Adaptive sampling + the 24 h soak are Phase 13 | `ResponsiveColumnsTests`; live: dashboard repaints at ~1 Hz with `PowerSampleSeconds = 1` | 🔨 (throttling done; adaptive sampling + soak Phase 13) |
-| R-100 | Security: no admin, parameterised SQL, safe paths | §46 | all | Standard user; prepared statements; sanitised metadata | Security review + unit | 📋 |
+| R-100 | Security: no admin, parameterised SQL, safe paths | §46 | all | Standard user; prepared statements throughout; export writes only to an OS-picker path (Phase 11); the copied diagnostics report redacts the user-profile path (Phase 12). Full security review still pending Phase 14 | Security review (Phase 14) + unit | 🔨 |
 
 ---
 

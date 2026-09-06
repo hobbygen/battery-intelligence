@@ -93,6 +93,89 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
+            <!-- Recent activity (log viewer) -->
+            <StackPanel Spacing="10">
+                <controls:CardHeader Glyph="&#xE9F9;" Text="RECENT ACTIVITY" />
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="14">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <controls:Segmented
+                                Grid.Column="0"
+                                HorizontalAlignment="Left"
+                                ItemsSource="{x:Bind ViewModel.LogLevelOptions}"
+                                SelectedIndex="{x:Bind ViewModel.SelectedLogLevelIndex, Mode=TwoWay}" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <Button
+                                    AutomationProperties.Name="Refresh log"
+                                    Command="{x:Bind ViewModel.RefreshLogsCommand}"
+                                    Content="Refresh" />
+                                <Button
+                                    AutomationProperties.Name="Open log folder"
+                                    Command="{x:Bind ViewModel.OpenLogFolderCommand}"
+                                    Content="Open folder" />
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock
+                            Foreground="{ThemeResource AppText3Brush}"
+                            Style="{StaticResource MetricLabelTextStyle}"
+                            Text="No log entries at this level."
+                            Visibility="{x:Bind ViewModel.NoLogRows, Mode=OneWay}" />
+
+                        <ScrollViewer
+                            MaxHeight="380"
+                            HorizontalScrollBarVisibility="Auto"
+                            VerticalScrollBarVisibility="Auto"
+                            Visibility="{x:Bind ViewModel.HasLogRows, Mode=OneWay}">
+                            <ItemsControl ItemsSource="{x:Bind ViewModel.LogRows, Mode=OneWay}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:LogRow">
+                                        <Grid Padding="0,3" ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock
+                                                Grid.Column="0"
+                                                FontFamily="Consolas"
+                                                FontSize="12"
+                                                Foreground="{ThemeResource AppText3Brush}"
+                                                Text="{x:Bind Time}" />
+                                            <TextBlock
+                                                Grid.Column="1"
+                                                Width="64"
+                                                FontFamily="Consolas"
+                                                FontSize="12"
+                                                FontWeight="SemiBold"
+                                                Foreground="{ThemeResource AppText2Brush}"
+                                                Text="{x:Bind Level}" />
+                                            <TextBlock
+                                                Grid.Column="2"
+                                                FontFamily="Consolas"
+                                                FontSize="12"
+                                                IsTextSelectionEnabled="True"
+                                                Text="{x:Bind Text}"
+                                                TextWrapping="Wrap" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <TextBlock
+                            Foreground="{ThemeResource AppText3Brush}"
+                            Style="{StaticResource MetricLabelTextStyle}"
+                            Text="{x:Bind ViewModel.LogDirectoryLine, Mode=OneWay}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
         </StackPanel>
     </ScrollViewer>
 

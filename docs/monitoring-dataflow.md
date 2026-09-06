@@ -247,3 +247,12 @@ disk-write budget.
 
 No sampler failure can affect another. A dead temperature sensor degrades exactly
 one page.
+
+**Implemented (Phase 12).** `Core.Diagnostics.MonitoringStatusRegistry` realises
+the `Healthy`/`Degraded` surface: every hosted orchestrator reports each tick's
+outcome, and the registry flips a component to `Degraded` after three consecutive
+failures and back to `Healthy` on the next success. The Diagnostics page's
+"Monitoring" section renders it with the last error. The intermediate `Retrying`
+state and its exponential backoff are **not** built yet — orchestrators currently
+catch and retry at their normal fixed cadence; the backoff layer lands with the
+Phase 13 adaptive-sampling work.

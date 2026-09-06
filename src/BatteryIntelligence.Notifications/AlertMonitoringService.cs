@@ -1,5 +1,6 @@
 using BatteryIntelligence.Core.Alerts;
 using BatteryIntelligence.Core.Configuration;
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Interfaces;
 using BatteryIntelligence.Core.Models;
@@ -34,6 +35,7 @@ public sealed class AlertMonitoringService : IAlertMonitoringService, IHostedSer
     private readonly INotificationPresenter _presenter;
     private readonly ISettingsService _settings;
     private readonly ILogger<AlertMonitoringService> _logger;
+    private readonly IMonitoringStatusRegistry _status;
 
     private readonly AlertRuleEngine _engine = new();
     private readonly SemaphoreSlim _evalGate = new(1, 1);
@@ -52,7 +54,8 @@ public sealed class AlertMonitoringService : IAlertMonitoringService, IHostedSer
         IAlertStore alertStore,
         INotificationPresenter presenter,
         ISettingsService settings,
-        ILogger<AlertMonitoringService> logger)
+        ILogger<AlertMonitoringService> logger,
+        IMonitoringStatusRegistry status)
     {
         ArgumentNullException.ThrowIfNull(battery);
         ArgumentNullException.ThrowIfNull(analytics);
@@ -62,6 +65,7 @@ public sealed class AlertMonitoringService : IAlertMonitoringService, IHostedSer
         ArgumentNullException.ThrowIfNull(presenter);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(status);
 
         _battery = battery;
         _analytics = analytics;
@@ -71,6 +75,7 @@ public sealed class AlertMonitoringService : IAlertMonitoringService, IHostedSer
         _presenter = presenter;
         _settings = settings;
         _logger = logger;
+        _status = status;
     }
 
     /// <inheritdoc/>
@@ -231,6 +236,7 @@ public sealed class AlertMonitoringService : IAlertMonitoringService, IHostedSer
             AlertEvaluationInput input = await BuildInputAsync(primary, now).ConfigureAwait(false);
             IReadOnlyList<Alert> fired = _engine.Evaluate(input, alerts, now);
             LastError = null;
+            _status.ReportSuccess(MonitoringComponent.Alerts);
 
             if (fired.Count == 0)
             {
@@ -288,6 +294,7 @@ public sealed class AlertMonitoringService : IAlertMonitoringService, IHostedSer
         catch (Exception ex)
         {
             LastError = ex.Message;
+            _status.ReportFailure(MonitoringComponent.Alerts, ex.Message);
             _logger.LogWarning(ex, "Alert evaluation failed.");
         }
         finally

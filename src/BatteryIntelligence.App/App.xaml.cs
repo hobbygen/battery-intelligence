@@ -8,6 +8,7 @@ using BatteryIntelligence.Notifications;
 using BatteryIntelligence.Core.Analytics;
 using BatteryIntelligence.Core.Configuration;
 using BatteryIntelligence.Core.Constants;
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Interfaces;
 using BatteryIntelligence.Data;
@@ -225,6 +226,12 @@ public partial class App : Application
     {
         // Infrastructure
         services.AddSingleton<ISettingsService, JsonSettingsService>();
+
+        // Monitoring status registry (Phase 12) — every hosted orchestrator
+        // reports its tick outcomes here; the Diagnostics page reads it. Registered
+        // first so it is available to inject into the monitoring blocks below.
+        services.AddSingleton<IMonitoringStatusRegistry, MonitoringStatusRegistry>();
+        services.AddSingleton<ILogReader, LogFileReader>();
 
         // Persistence (Phase 3)
         services.AddSingleton<ISqliteConnectionFactory>(sp =>

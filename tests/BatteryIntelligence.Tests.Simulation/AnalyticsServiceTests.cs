@@ -1,5 +1,6 @@
 using BatteryIntelligence.Analytics;
 using BatteryIntelligence.Core.Analytics;
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Models;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -117,7 +118,7 @@ public sealed class AnalyticsServiceTests
         AnalyticsFakeSettings settings = new();
 
         AnalyticsService service = new(
-            battery, sessions, runtime, read, health, insights, provider, settings, NullLogger<AnalyticsService>.Instance);
+            battery, sessions, runtime, read, health, insights, provider, settings, NullLogger<AnalyticsService>.Instance, new MonitoringStatusRegistry());
 
         return (service, battery, health, insights, read);
     }

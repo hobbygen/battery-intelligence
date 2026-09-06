@@ -1,4 +1,5 @@
 using BatteryIntelligence.Core.Configuration;
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Data;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -327,7 +328,7 @@ public sealed class DatabaseMaintenanceServiceTests
     }
 
     private static DatabaseMaintenanceService CreateService(TempDatabase db, AppSettings? settings = null) =>
-        new(db.ConnectionFactory, new FakeSettingsService(settings), NullLogger<DatabaseMaintenanceService>.Instance);
+        new(db.ConnectionFactory, new FakeSettingsService(settings), NullLogger<DatabaseMaintenanceService>.Instance, new MonitoringStatusRegistry());
 
     private static long FloorToMinute(DateTimeOffset timestamp) =>
         (timestamp.ToUnixTimeMilliseconds() / OneMinuteMs) * OneMinuteMs;

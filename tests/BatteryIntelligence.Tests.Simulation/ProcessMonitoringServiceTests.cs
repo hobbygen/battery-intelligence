@@ -1,4 +1,5 @@
 using BatteryIntelligence.Core.Configuration;
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Interfaces;
 using BatteryIntelligence.Core.Models;
@@ -160,14 +161,48 @@ public sealed class ProcessMonitoringServiceTests
         Assert.True(second > first);
     }
 
+    [Fact]
+    public void Tick_WhenTheEnumeratorFailsRepeatedly_DrivesTheComponentDegraded_ThenRecovers()
+    {
+        FakeEnumerator processes = new(coreCount: 4) { ThrowOnEnumerate = true };
+        MonitoringStatusRegistry registry = new();
+        ProcessMonitoringService service = Create(processes, new FakeBattery(), new FakeQueue(), new FakeSessions(), registry);
+
+        for (int i = 0; i < MonitoringStatusRegistry.DegradedThreshold; i++)
+        {
+            service.Tick(Start.AddSeconds(10 * (i + 1)));
+        }
+
+        MonitoringStatus appUsage = registry.Snapshot().Single(s => s.Component == MonitoringComponent.ApplicationUsage);
+        Assert.Equal(MonitoringHealth.Degraded, appUsage.Health);
+        Assert.NotNull(appUsage.LastError);
+
+        // Failure isolation: no other subsystem is affected (specification section 44).
+        Assert.All(
+            registry.Snapshot().Where(s => s.Component != MonitoringComponent.ApplicationUsage),
+            s => Assert.Equal(MonitoringHealth.Starting, s.Health));
+
+        processes.ThrowOnEnumerate = false;
+        processes.Set(Proc(100, "chrome", TimeSpan.FromSeconds(1)));
+        service.Tick(Start.AddSeconds(100));
+
+        Assert.Equal(
+            MonitoringHealth.Healthy,
+            registry.Snapshot().Single(s => s.Component == MonitoringComponent.ApplicationUsage).Health);
+    }
+
     private static ProcessMonitoringService Create(
-        FakeEnumerator processes, FakeBattery battery, FakeQueue queue, FakeSessions sessions, int topApplicationCount = 40)
+        FakeEnumerator processes, FakeBattery battery, FakeQueue queue, FakeSessions sessions, int topApplicationCount = 40) =>
+        Create(processes, battery, queue, sessions, new MonitoringStatusRegistry(), topApplicationCount);
+
+    private static ProcessMonitoringService Create(
+        FakeEnumerator processes, FakeBattery battery, FakeQueue queue, FakeSessions sessions, MonitoringStatusRegistry registry, int topApplicationCount = 40)
     {
         FakeSettings settings = new();
         settings.Current.Processes.TopApplicationCount = topApplicationCount;
         settings.Current.Processes.IdleCpuFloorPercent = 3.0;
         return new ProcessMonitoringService(
-            processes, battery, sessions, queue, settings, NullLogger<ProcessMonitoringService>.Instance);
+            processes, battery, sessions, queue, settings, NullLogger<ProcessMonitoringService>.Instance, registry);
     }
 
     private static ProcessRawSample Proc(int pid, string name, TimeSpan cpu, bool foreground = false) => new(
@@ -185,9 +220,12 @@ public sealed class ProcessMonitoringServiceTests
 
         public int CoreCount { get; } = coreCount;
 
+        public bool ThrowOnEnumerate { get; set; }
+
         public void Set(params ProcessRawSample[] samples) => _current = samples;
 
-        public IReadOnlyList<ProcessRawSample> Enumerate() => _current;
+        public IReadOnlyList<ProcessRawSample> Enumerate() =>
+            ThrowOnEnumerate ? throw new InvalidOperationException("enumeration failed") : _current;
     }
 
     private sealed class FakeQueue : IProcessSampleWriteQueue

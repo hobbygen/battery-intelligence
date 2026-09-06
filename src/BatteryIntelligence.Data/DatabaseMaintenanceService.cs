@@ -1,4 +1,5 @@
 using BatteryIntelligence.Core.Configuration;
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Core.Interfaces;
 using BatteryIntelligence.Data.Sqlite;
 using Microsoft.Data.Sqlite;
@@ -37,6 +38,7 @@ public sealed class DatabaseMaintenanceService : IHostedService, IDisposable
     private readonly ISqliteConnectionFactory _connectionFactory;
     private readonly ISettingsService _settings;
     private readonly ILogger<DatabaseMaintenanceService> _logger;
+    private readonly IMonitoringStatusRegistry _status;
     private readonly SemaphoreSlim _rollupGate = new(1, 1);
     private readonly SemaphoreSlim _retentionGate = new(1, 1);
 
@@ -46,15 +48,18 @@ public sealed class DatabaseMaintenanceService : IHostedService, IDisposable
     public DatabaseMaintenanceService(
         ISqliteConnectionFactory connectionFactory,
         ISettingsService settings,
-        ILogger<DatabaseMaintenanceService> logger)
+        ILogger<DatabaseMaintenanceService> logger,
+        IMonitoringStatusRegistry status)
     {
         ArgumentNullException.ThrowIfNull(connectionFactory);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(status);
 
         _connectionFactory = connectionFactory;
         _settings = settings;
         _logger = logger;
+        _status = status;
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -118,9 +123,11 @@ public sealed class DatabaseMaintenanceService : IHostedService, IDisposable
             await RollUpApplicationUsageAsync(connection, cancellationToken).ConfigureAwait(false);
             await RollUpSampleHourAsync(connection, cancellationToken).ConfigureAwait(false);
             await RollUpDailyStatisticsAsync(connection, cancellationToken).ConfigureAwait(false);
+            _status.ReportSuccess(MonitoringComponent.Database);
         }
         catch (Exception ex) when (ex is SqliteException or IOException or UnauthorizedAccessException)
         {
+            _status.ReportFailure(MonitoringComponent.Database, ex.Message);
             _logger.LogWarning(ex, "Rollup pass failed; will retry on the next interval.");
         }
         finally
@@ -431,9 +438,12 @@ public sealed class DatabaseMaintenanceService : IHostedService, IDisposable
                 await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
                 throw;
             }
+
+            _status.ReportSuccess(MonitoringComponent.Database);
         }
         catch (Exception ex) when (ex is SqliteException or IOException or UnauthorizedAccessException)
         {
+            _status.ReportFailure(MonitoringComponent.Database, ex.Message);
             _logger.LogWarning(ex, "Retention pass failed; will retry on the next interval.");
         }
         finally

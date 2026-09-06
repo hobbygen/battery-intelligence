@@ -1,4 +1,5 @@
 using BatteryIntelligence.Core.Battery;
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Interfaces;
 using BatteryIntelligence.Core.Models;
@@ -39,6 +40,7 @@ public sealed class PowerMonitoringService : IPowerMonitoringService, IHostedSer
     private readonly ISessionMonitoringService _sessions;
     private readonly IPowerSampleWriteQueue _writeQueue;
     private readonly ILogger<PowerMonitoringService> _logger;
+    private readonly IMonitoringStatusRegistry _status;
 
     private readonly Lock _sync = new();
     private readonly Dictionary<string, BatteryPowerContext> _contexts = [];
@@ -50,17 +52,20 @@ public sealed class PowerMonitoringService : IPowerMonitoringService, IHostedSer
         IBatteryMonitoringService battery,
         ISessionMonitoringService sessions,
         IPowerSampleWriteQueue writeQueue,
-        ILogger<PowerMonitoringService> logger)
+        ILogger<PowerMonitoringService> logger,
+        IMonitoringStatusRegistry status)
     {
         ArgumentNullException.ThrowIfNull(battery);
         ArgumentNullException.ThrowIfNull(sessions);
         ArgumentNullException.ThrowIfNull(writeQueue);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(status);
 
         _battery = battery;
         _sessions = sessions;
         _writeQueue = writeQueue;
         _logger = logger;
+        _status = status;
     }
 
     public IReadOnlyList<PowerReading> CurrentReadings => _currentReadings;
@@ -189,6 +194,7 @@ public sealed class PowerMonitoringService : IPowerMonitoringService, IHostedSer
     private void Ingest(IReadOnlyList<BatterySnapshot> snapshots)
     {
         List<PowerReading> readings = [];
+        string? tickError = null;
 
         lock (_sync)
         {
@@ -208,6 +214,7 @@ public sealed class PowerMonitoringService : IPowerMonitoringService, IHostedSer
                 {
                     // One battery failing must not stop the others (specification section 44).
                     LastError = ex.Message;
+                    tickError = ex.Message;
                     _logger.LogWarning(ex, "Power sampling failed for battery {BatteryId}.", snapshot.Device.HardwareId);
                 }
             }
@@ -216,6 +223,15 @@ public sealed class PowerMonitoringService : IPowerMonitoringService, IHostedSer
             {
                 _currentReadings = readings;
             }
+        }
+
+        if (tickError is null)
+        {
+            _status.ReportSuccess(MonitoringComponent.Power);
+        }
+        else
+        {
+            _status.ReportFailure(MonitoringComponent.Power, tickError);
         }
 
         Updated?.Invoke(this, EventArgs.Empty);

@@ -951,14 +951,73 @@ plus "delete all history" in Settings (R-069).
 
 ---
 
-## Phase 12 — Diagnostics
+## Phase 12 — Diagnostics (complete)
 
-**Deliverables:** live capability matrix rendering, monitoring state per subsystem
-with last error, database statistics, log viewer, "Copy diagnostics", About page
-with versions, licenses, privacy statement and estimation methodology.
+Finishing the Diagnostics/About surface. The capability matrix, database
+statistics, "Copy report", and the About versions / privacy / methodology were
+already in place from Phases 1–11; this phase adds the two missing deliverables
+(per-subsystem monitoring state, and a log viewer) plus a licence list and report
+redaction.
 
-**Depends on:** all. **Exit:** every unavailable capability visible with its reason;
-copied diagnostics contain no personal data.
+**What shipped:**
+
+- `Core.Diagnostics.MonitoringStatusRegistry` (`IMonitoringStatusRegistry`) — a
+  thread-safe singleton every hosted orchestrator reports each tick's outcome to.
+  `MonitoringComponent` { Battery, Power, Temperature, ApplicationUsage, Sessions,
+  Analytics, Alerts, Database }; `MonitoringHealth` { Starting, Healthy, Degraded }
+  — `Degraded` after `DegradedThreshold` (3) consecutive failures, back to
+  `Healthy` on the next success. `Changed` fires only on a rendered-state change,
+  not per success tick. Pure C#, unit-tested.
+- The eight orchestrators wired: one `IMonitoringStatusRegistry` constructor arg
+  and a `ReportSuccess` / `ReportFailure` call beside each existing
+  `LastError = …` line. `SessionMonitoringService` and `DatabaseMaintenanceService`
+  (rollup + retention) gained the tick-error tracking they lacked.
+- `Core.Diagnostics.LogLineParser` + `LogEntry` — parses the Serilog file sink's
+  output template into typed entries, folding exception/continuation lines into
+  the entry above; levels normalised (`INF→INFO`, `FTL→FATAL`, …). `ILogReader`
+  (Core) / `LogFileReader` (App) reads the newest `app-*.log` with
+  `FileShare.ReadWrite`, returns the last N entries, never throws.
+- `DiagnosticsViewModel` — a **Monitoring** section (reusing the existing
+  `DiagnosticSection` renderer: name · Healthy / Degraded — <error> / Starting… ·
+  last-activity), rebuilt on `IMonitoringStatusRegistry.Changed`; a **Recent
+  activity** log viewer (level `Segmented` filter, Refresh, Open log folder); and
+  the copied report now redacts the user-profile path to `%USERPROFILE%`
+  (R-100 / spec §46).
+- `DiagnosticsPage.xaml` — a "Recent activity" card (monospace, capped-height
+  scroll, level chips coloured by severity).
+- About page — a **LICENCES** card (Windows App SDK / WinUI 3, CommunityToolkit.Mvvm,
+  Serilog, LiveChartsCore, SkiaSharp, H.NotifyIcon, Microsoft.Data.Sqlite with
+  their licences) above the acknowledgements paragraph.
+
+**Depends on:** all prior phases.
+
+**Exit criteria:**
+
+| Criterion | Result |
+|---|---|
+| Live capability matrix, every unavailable row with its reason | ✅ unchanged from Phase 1; `BuildBatterySection` renders all rows incl. Unavailable |
+| Monitoring state per subsystem with last error | ✅ `MonitoringStatusRegistry` + Diagnostics "Monitoring" section; `MonitoringStatusRegistryTests` (transitions, `Changed` semantics), `ProcessMonitoringServiceTests` failure-isolation test (enumerator throws → ApplicationUsage Degraded, others Starting, recovers) |
+| Database statistics | ✅ unchanged (Storage section) |
+| Log viewer | ✅ `LogFileReader` + `LogLineParser` (`LogLineParserTests`); Diagnostics "Recent activity" card with level filter + Open folder |
+| "Copy diagnostics" contains no personal data | ✅ user-profile path redacted to `%USERPROFILE%`; the report has no names, serials, or file contents |
+| About: versions, licences, privacy, methodology | ✅ all four present (licences new this phase) |
+| Solution builds, Debug and Release | ✅ 0 errors, 0 warnings |
+| Unit + Simulation + Integration tests | ✅ 342 passing (255 + 34 + 53) |
+
+**Deviations from plan**
+
+- **Two health states (`Healthy` / `Degraded`) plus `Starting`, not the three of
+  `monitoring-dataflow.md` §8** — the `Retrying` state needs an
+  exponential-backoff retry layer that does not exist yet (orchestrators catch and
+  continue at their normal cadence). The registry surfaces what the Diagnostics
+  page needs now; backoff is Phase 13's adaptive-sampling work.
+- **`Degraded` is a fixed threshold of ≥ 3 consecutive tick failures**, not
+  per-subsystem-tuned.
+- **The log viewer reads the current file only** (the newest `app-*.log`), not
+  the full 14-file history — "recent activity" is what the page needs; the folder
+  button opens the rest.
+- **`Copy report` redacts only the user-profile path prefix** — the only personal
+  data the report contains.
 
 ---
 

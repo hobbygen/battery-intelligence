@@ -12,6 +12,11 @@ namespace BatteryIntelligence.App.ViewModels;
 /// <param name="Value">The value.</param>
 public sealed record AboutRow(string Label, string Value);
 
+/// <summary>A third-party component and its licence, for the About page.</summary>
+/// <param name="Component">The library or SDK.</param>
+/// <param name="License">Its licence.</param>
+public sealed record LicenseRow(string Component, string License);
+
 /// <summary>
 /// Backs the About page: application identity plus a handful of genuinely-known
 /// system facts. Everything here is real — nothing is placeholder.
@@ -58,6 +63,18 @@ public sealed partial class AboutViewModel : ObservableObject
         get => _systemRows;
         private set => SetProperty(ref _systemRows, value);
     }
+
+    /// <summary>Third-party components bundled with the app, with their licences (specification section 69).</summary>
+    public IReadOnlyList<LicenseRow> Licenses { get; } =
+    [
+        new("Windows App SDK / WinUI 3", "MIT"),
+        new("CommunityToolkit.Mvvm", "MIT"),
+        new("Serilog + File / Debug sinks", "Apache-2.0"),
+        new("LiveChartsCore.SkiaSharpView", "MIT"),
+        new("SkiaSharp", "MIT"),
+        new("H.NotifyIcon", "MIT"),
+        new("Microsoft.Data.Sqlite", "MIT"),
+    ];
 
     private async Task LoadAsync()
     {

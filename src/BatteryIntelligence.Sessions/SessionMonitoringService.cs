@@ -1,3 +1,4 @@
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Interfaces;
 using BatteryIntelligence.Core.Models;
@@ -32,6 +33,7 @@ public sealed class SessionMonitoringService : ISessionMonitoringService, IHoste
     private readonly ISessionStore _store;
     private readonly BatteryMessageWindow? _messageWindow;
     private readonly ILogger<SessionMonitoringService> _logger;
+    private readonly IMonitoringStatusRegistry _status;
     private readonly Dictionary<string, BatteryContext> _contexts = [];
     private readonly SemaphoreSlim _tickGate = new(1, 1);
 
@@ -44,15 +46,18 @@ public sealed class SessionMonitoringService : ISessionMonitoringService, IHoste
         IBatteryMonitoringService batteryMonitoring,
         ISessionStore store,
         ILogger<SessionMonitoringService> logger,
+        IMonitoringStatusRegistry status,
         BatteryMessageWindow? messageWindow = null)
     {
         ArgumentNullException.ThrowIfNull(batteryMonitoring);
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(status);
 
         _batteryMonitoring = batteryMonitoring;
         _store = store;
         _logger = logger;
+        _status = status;
         _messageWindow = messageWindow;
     }
 
@@ -204,6 +209,7 @@ public sealed class SessionMonitoringService : ISessionMonitoringService, IHoste
             return;
         }
 
+        string? tickError = null;
         try
         {
             foreach (BatterySnapshot snapshot in _batteryMonitoring.CurrentSnapshots)
@@ -221,6 +227,7 @@ public sealed class SessionMonitoringService : ISessionMonitoringService, IHoste
                 {
                     // One battery's session tracking failing must not stop the
                     // others (specification section 44).
+                    tickError = ex.Message;
                     _logger.LogWarning(ex, "Session tracking failed for battery {BatteryId}.", snapshot.Device.HardwareId);
                 }
             }
@@ -228,6 +235,15 @@ public sealed class SessionMonitoringService : ISessionMonitoringService, IHoste
         finally
         {
             _tickGate.Release();
+        }
+
+        if (tickError is null)
+        {
+            _status.ReportSuccess(MonitoringComponent.Sessions);
+        }
+        else
+        {
+            _status.ReportFailure(MonitoringComponent.Sessions, tickError);
         }
 
         CurrentSession = _contexts.Values.FirstOrDefault()?.Machine.CurrentSession;

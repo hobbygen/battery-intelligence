@@ -1,4 +1,5 @@
 using BatteryIntelligence.Core.Analytics;
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Interfaces;
 using BatteryIntelligence.Core.Models;
@@ -34,6 +35,7 @@ public sealed class AnalyticsService : IAnalyticsService, IHostedService, IDispo
     private readonly IInsightProvider _insightProvider;
     private readonly ISettingsService _settings;
     private readonly ILogger<AnalyticsService> _logger;
+    private readonly IMonitoringStatusRegistry _status;
 
     private readonly SemaphoreSlim _recomputeGate = new(1, 1);
     private Timer? _timer;
@@ -52,7 +54,8 @@ public sealed class AnalyticsService : IAnalyticsService, IHostedService, IDispo
         IInsightStore insightStore,
         IInsightProvider insightProvider,
         ISettingsService settings,
-        ILogger<AnalyticsService> logger)
+        ILogger<AnalyticsService> logger,
+        IMonitoringStatusRegistry status)
     {
         ArgumentNullException.ThrowIfNull(battery);
         ArgumentNullException.ThrowIfNull(sessions);
@@ -63,6 +66,7 @@ public sealed class AnalyticsService : IAnalyticsService, IHostedService, IDispo
         ArgumentNullException.ThrowIfNull(insightProvider);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(status);
 
         _battery = battery;
         _sessions = sessions;
@@ -73,6 +77,7 @@ public sealed class AnalyticsService : IAnalyticsService, IHostedService, IDispo
         _insightProvider = insightProvider;
         _settings = settings;
         _logger = logger;
+        _status = status;
 
         DateTimeOffset now = DateTimeOffset.UtcNow;
         _currentHealth = HealthScore.Unavailable(HealthScoreCalculator.Version, now, []);
@@ -323,11 +328,13 @@ public sealed class AnalyticsService : IAnalyticsService, IHostedService, IDispo
             _trend = trend;
             _insights = insights;
             LastError = null;
+            _status.ReportSuccess(MonitoringComponent.Analytics);
             Updated?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex)
         {
             LastError = ex.Message;
+            _status.ReportFailure(MonitoringComponent.Analytics, ex.Message);
             _logger.LogWarning(ex, "Analytics recompute failed.");
         }
         finally

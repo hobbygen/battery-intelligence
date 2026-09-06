@@ -1,3 +1,4 @@
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Interfaces;
 using BatteryIntelligence.Core.Models;
@@ -41,6 +42,7 @@ public sealed class ThermalMonitoringService : ITemperatureMonitoringService, IH
     private readonly ITemperatureSampleWriteQueue _writeQueue;
     private readonly ISettingsService _settings;
     private readonly ILogger<ThermalMonitoringService> _logger;
+    private readonly IMonitoringStatusRegistry _status;
 
     private readonly Lock _sync = new();
     private readonly Dictionary<string, BatteryThermalContext> _contexts = [];
@@ -53,19 +55,22 @@ public sealed class ThermalMonitoringService : ITemperatureMonitoringService, IH
         ISessionMonitoringService sessions,
         ITemperatureSampleWriteQueue writeQueue,
         ISettingsService settings,
-        ILogger<ThermalMonitoringService> logger)
+        ILogger<ThermalMonitoringService> logger,
+        IMonitoringStatusRegistry status)
     {
         ArgumentNullException.ThrowIfNull(battery);
         ArgumentNullException.ThrowIfNull(sessions);
         ArgumentNullException.ThrowIfNull(writeQueue);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(status);
 
         _battery = battery;
         _sessions = sessions;
         _writeQueue = writeQueue;
         _settings = settings;
         _logger = logger;
+        _status = status;
     }
 
     public IReadOnlyList<TemperatureReading> CurrentReadings => _currentReadings;
@@ -216,6 +221,7 @@ public sealed class ThermalMonitoringService : ITemperatureMonitoringService, IH
     {
         List<TemperatureReading> readings = [];
         bool sawSensor = false;
+        string? tickError = null;
 
         lock (_sync)
         {
@@ -238,6 +244,7 @@ public sealed class ThermalMonitoringService : ITemperatureMonitoringService, IH
                 catch (Exception ex)
                 {
                     LastError = ex.Message;
+                    tickError = ex.Message;
                     _logger.LogWarning(ex, "Temperature sampling failed for battery {BatteryId}.", snapshot.Device.HardwareId);
                 }
             }
@@ -255,6 +262,15 @@ public sealed class ThermalMonitoringService : ITemperatureMonitoringService, IH
         else if (!SensorAvailable)
         {
             SensorAvailable = _battery.Capabilities?.Find(CapabilityId.Temperature)?.Available ?? false;
+        }
+
+        if (tickError is null)
+        {
+            _status.ReportSuccess(MonitoringComponent.Temperature);
+        }
+        else
+        {
+            _status.ReportFailure(MonitoringComponent.Temperature, tickError);
         }
 
         Updated?.Invoke(this, EventArgs.Empty);

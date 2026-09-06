@@ -1,3 +1,4 @@
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Interfaces;
 using BatteryIntelligence.Core.Models;
@@ -106,7 +107,7 @@ public sealed class PowerMonitoringServiceTests
     }
 
     private static PowerMonitoringService Create(FakeBatteryMonitoringService battery, FakePowerSampleWriteQueue queue) =>
-        new(battery, new FakeSessionMonitoringService(), queue, NullLogger<PowerMonitoringService>.Instance);
+        new(battery, new FakeSessionMonitoringService(), queue, NullLogger<PowerMonitoringService>.Instance, new MonitoringStatusRegistry());
 
     private static BatterySnapshot Discharging(string id, DateTimeOffset ts, int powerMw, int voltageMv) =>
         Build(id, ts, BatteryState.Discharging, powerMw, voltageMv, remainingMWh: 30_000);
