@@ -4,6 +4,7 @@ obj/
 [Dd]ebug/
 [Rr]elease/
 artifacts/
+dist/
 
 # IDE
 .vs/
