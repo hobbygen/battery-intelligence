@@ -449,6 +449,16 @@ Rollup runs on a background timer, well after the boundary has passed, and is
 idempotent — re-running over an already-rolled period produces the same result,
 so a crash mid-rollup is harmless.
 
+The **read** side mirrors this ladder. `Core.History.HistoryTierSelector.TierForSpan`
+maps a requested window to the coarsest tier that still reads well: ≤ 6 h → raw,
+≤ 7 d → minute, ≤ 120 d → hour, otherwise daily. Because `DailyStatistics` holds
+session aggregates rather than a per-metric time series, a window wide enough to
+select the daily tier is served from `SampleHour` instead, clamped to the hour
+tier's 365-day window (`Data.HistoryReadStore`). Every tier read is a single
+indexed range scan on its time column, then `MinMaxDownsampler` bounds the result
+to the chart's point budget — so a one-year range never returns more than a few
+thousand rows and never stalls the UI.
+
 Cleanup rules:
 
 - Never delete rows belonging to an **open session** (spec §29).

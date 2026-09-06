@@ -41,6 +41,7 @@ public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
     private readonly IBatteryMonitoringService _monitoring;
     private readonly IDatabaseDiagnosticsProvider _databaseDiagnostics;
     private readonly IAlertMonitoringService _alerts;
+    private readonly IHistoryReadStore _history;
     private readonly DispatcherQueue _dispatcher;
     private readonly IReadOnlyList<DiagnosticSection> _staticSections;
     private IReadOnlyList<DiagnosticSection> _sections;
@@ -50,17 +51,20 @@ public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
         ILogger<DiagnosticsViewModel> logger,
         IBatteryMonitoringService monitoring,
         IDatabaseDiagnosticsProvider databaseDiagnostics,
-        IAlertMonitoringService alerts)
+        IAlertMonitoringService alerts,
+        IHistoryReadStore history)
     {
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(monitoring);
         ArgumentNullException.ThrowIfNull(databaseDiagnostics);
         ArgumentNullException.ThrowIfNull(alerts);
+        ArgumentNullException.ThrowIfNull(history);
 
         _logger = logger;
         _monitoring = monitoring;
         _databaseDiagnostics = databaseDiagnostics;
         _alerts = alerts;
+        _history = history;
         _dispatcher = DispatcherQueue.GetForCurrentThread();
         _staticSections = BuildSections();
         _sections = _staticSections;
@@ -95,11 +99,12 @@ public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
     private async Task RebuildSectionsAsync()
     {
         DatabaseDiagnostics database = await SafeGetDatabaseDiagnosticsAsync().ConfigureAwait(true);
+        string historyExtent = await SafeGetHistoryExtentAsync().ConfigureAwait(true);
 
         Sections =
         [
             .. _staticSections,
-            BuildStorageSection(database),
+            BuildStorageSection(database, historyExtent),
             new DiagnosticSection("Alerts", [
                 new DiagnosticEntry(
                     "Windows notifications",
@@ -141,14 +146,36 @@ public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
         }
     }
 
+    private async Task<string> SafeGetHistoryExtentAsync()
+    {
+        try
+        {
+            (DateTimeOffset? earliest, DateTimeOffset? latest) = await _history.GetExtentAsync().ConfigureAwait(true);
+            if (earliest is not { } e || latest is not { } l)
+            {
+                return "No history recorded yet";
+            }
+
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"{e.LocalDateTime:yyyy-MM-dd HH:mm} to {l.LocalDateTime:yyyy-MM-dd HH:mm} ({(l - e).TotalDays:F1} days)");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not read history extent.");
+            return "Unavailable";
+        }
+    }
+
     /// <summary>Database facts (specification section 47) — dynamic because size, row count and last-write time change while the app runs.</summary>
-    private static DiagnosticSection BuildStorageSection(DatabaseDiagnostics database)
+    private static DiagnosticSection BuildStorageSection(DatabaseDiagnostics database, string historyExtent)
     {
         List<DiagnosticEntry> entries =
         [
             new("Data directory", AppPaths.DataDirectory, "LocalApplicationData"),
             new("Settings file", File.Exists(AppPaths.SettingsFile) ? "Present" : "Not created yet", AppPaths.SettingsFile),
             new("Log directory", AppPaths.LogsDirectory, "LocalApplicationData"),
+            new("History extent", historyExtent, "IHistoryReadStore — earliest to latest sample"),
         ];
 
         if (!database.Exists)

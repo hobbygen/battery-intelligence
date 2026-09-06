@@ -1,8 +1,10 @@
+using System.Globalization;
 using BatteryIntelligence.App.Services;
 using BatteryIntelligence.Core.Constants;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Interfaces;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Microsoft.Extensions.Logging;
 
 namespace BatteryIntelligence.App.ViewModels;
 
@@ -19,15 +21,28 @@ public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly ISettingsService _settings;
     private readonly IThemeService _theme;
+    private readonly IHistoryMaintenance _historyMaintenance;
+    private readonly ILogger<SettingsViewModel> _logger;
 
-    public SettingsViewModel(ISettingsService settings, IThemeService theme)
+    public SettingsViewModel(
+        ISettingsService settings,
+        IThemeService theme,
+        IHistoryMaintenance historyMaintenance,
+        ILogger<SettingsViewModel> logger)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(theme);
+        ArgumentNullException.ThrowIfNull(historyMaintenance);
+        ArgumentNullException.ThrowIfNull(logger);
 
         _settings = settings;
         _theme = theme;
+        _historyMaintenance = historyMaintenance;
+        _logger = logger;
     }
+
+    /// <summary>The exact word the user must type to confirm deleting all history.</summary>
+    public static string DeleteConfirmationWord => "DELETE";
 
     /// <summary>Theme options, in the order shown in the combo box.</summary>
     public IReadOnlyList<string> ThemeOptions { get; } = ["System", "Light", "Dark"];
@@ -118,4 +133,24 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     /// <summary>Full path of the settings file, shown for transparency.</summary>
     public string SettingsFilePath => AppPaths.SettingsFile;
+
+    /// <summary>
+    /// Deletes every telemetry, session, health, insight and alert row and
+    /// reclaims the space (specification section 29). Identity and configuration
+    /// rows are kept. Returns a short result message for the page to show.
+    /// </summary>
+    public async Task<string> DeleteAllHistoryAsync()
+    {
+        try
+        {
+            await _historyMaintenance.DeleteAllAsync().ConfigureAwait(true);
+            _logger.LogInformation("All battery history deleted at the user's request.");
+            return "All battery history has been deleted.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Deleting battery history failed.");
+            return string.Create(CultureInfo.CurrentCulture, $"Could not delete history: {ex.Message}");
+        }
+    }
 }

@@ -861,14 +861,93 @@ responsive grid, per-card info tooltips, and the last throttle.
 
 ---
 
-## Phase 11 — History and reporting
+## Phase 11 — History and reporting (complete)
 
-**Deliverables:** History page with 24 h–1 y + custom ranges, zoom and tooltips,
-tier-aware queries (raw → minute → hour → daily by range), `CsvExporter`,
-`JsonExporter` behind `IReportExporter`, export scope selection, safe path handling.
+The last read-side feature: a tier-aware History page and a CSV / JSON export,
+plus "delete all history" in Settings (R-069).
 
-**Depends on:** 3, 8. **Exit:** a one-year range loads without stalling the UI;
-exports are spreadsheet-friendly (CSV) and human-readable (JSON).
+**What shipped:**
+
+- `Core.History.HistoryTierSelector` — the pure, unit-tested tier logic:
+  `TierForSpan(TimeSpan)` → `Raw` (≤ 6 h) / `Minute` (≤ 7 d) / `Hour` (≤ 120 d) /
+  `Daily`, and `ResolveRange(HistoryRange, now)` → a concrete `DateRange`.
+  `HistoryMetric` { ChargePercent, PowerMw, VoltageMv, TemperatureCelsius },
+  `HistoryRange`, `[Flags] ExportScope`, and the `HistoryRequest` / `ExportRequest`
+  / `ExportTable` models. Seams `IHistoryReadStore`, `IExportDataSource`,
+  `IReportExporter`, `IHistoryMaintenance` — declared in Core, implemented in Data
+  (reads) and Reporting (formatting), the same pattern as `ISessionStore`.
+- `Reporting` project promoted from its stub (plain `net10.0`, Core-only
+  reference — formatting is pure). `CsvExporter` — RFC 4180 quoting (a field with
+  `,` `"` newline or an edge space is quoted, `"` doubled), `\r\n`, a UTF-8 BOM,
+  one `# <name>` section per table. `JsonExporter` — `Utf8JsonWriter` streaming a
+  root `{ exportedUtc, range, tables: { "<name>": [ {col: value} ] } }`; values
+  are the strings the data source produced. Both write incrementally to the stream.
+- `Data.HistoryReadStore` — `TierForSpan` picks the table + column, a single
+  `SELECT time, value WHERE time IN [from, to)` reads it, `MinMaxDownsampler`
+  bounds the result to the point budget (default 800) → a `ChartSeries`.
+  `GetExtentAsync` (`MIN`/`MAX` over `BatterySample` + `SampleHour`),
+  `HasTemperatureDataAsync`. `Data.ExportDataSource` — one range-filtered `SELECT`
+  per scope flag, every value invariant-stringified, enum columns written as
+  names (`AlertType = "LowBattery"`). `Data.HistoryMaintenance` — one
+  `DELETE FROM` per telemetry / session / health / insight / alert table in a
+  transaction, then `VACUUM` (the one sanctioned `VACUUM`, `database.md` §6);
+  `BatteryDevice` / `AppSettings` / `DataRetentionSettings` / `SchemaMigration`
+  are kept.
+- `Controls/PowerChart` extended: an `XLabelFormat` DP (or auto — `HH:mm:ss` /
+  `HH:mm` / `ddd HH:mm` / `d MMM` / `MMM yyyy` chosen from the visible span, with
+  a matching tick spacing), and an `EnableZoom` DP → `ZoomMode = X` plus
+  double-tap-to-reset. Both off/empty by default, so Power and Temperature are
+  unchanged.
+- `ViewModels/HistoryViewModel` — range + metric `Segmented`s, the current
+  `ChartSeries` and its window, a tier caption ("Minute averages · 7 days"),
+  loading / empty / "no temperature sensor" states, an export-scope checklist,
+  and `ExportCsv` / `ExportJson` commands over `Services/ExportService`
+  (a `FileSavePicker` via `InitializeWithWindow` with the shell window resolved
+  lazily through `App.ShellWindow`, then a plain `FileStream` to the picked path
+  — the only path the app ever writes to). `Views/HistoryPage` rebuilt in the
+  card language.
+- Settings gains a **DATA** section: the data folder, and "Delete all battery
+  history" behind a `ContentDialog` that requires typing `DELETE`
+  (`SettingsViewModel.DeleteAllHistoryAsync` → `IHistoryMaintenance`).
+- Diagnostics Storage section gains a **History extent** row (earliest → latest
+  sample) from `IHistoryReadStore.GetExtentAsync`.
+
+**Depends on:** 3, 8.
+
+**Exit criteria:**
+
+| Criterion | Result |
+|---|---|
+| History page, 24 h – 1 y ranges | ✅ five ranges; live: 24 h/7 d read minute averages, 30/90 d hourly, 1 y falls back to the hour tier |
+| Tier-aware queries (raw → minute → hour → daily) | ✅ `HistoryTierSelectorTests` (every boundary); `HistoryReadStoreTests` (2 h → Raw, 3 d → Minute, 60 d → Hour, empty range → `ChartSeries.Empty`) |
+| One-year range loads without stalling the UI | ✅ live: the query is off-thread and cancellable, the year range renders from ≤ a few thousand hour rows, downsampled to 800 |
+| Zoom + tooltips | ✅ `EnableZoom` → X pan/zoom, double-tap reset; adaptive axis + tooltip labels |
+| `CsvExporter` + `JsonExporter` behind `IReportExporter` | ✅ `CsvExporterTests` (RFC 4180 round-trip, BOM, `\r\n`, multi-table, empty table), `JsonExporterTests` (valid JSON, shape, escaping, `[]` for 0 rows) |
+| Export scope selection | ✅ eight-table checklist → `ExportScope` flags; `ExportDataSourceTests` (scope selects tables, range filters rows, enums as names) |
+| Safe path handling | ✅ the destination only ever comes from the OS picker; all export I/O in `try/catch` → a friendly message, never a throw |
+| Delete all history (R-069) | ✅ `HistoryMaintenanceTests` (every telemetry table emptied, `BatteryDevice` + `SchemaMigration` survive); Settings dialog requires typing `DELETE` |
+| Solution builds, Debug and Release | ✅ 0 errors, 0 warnings |
+| Unit + Simulation + Integration tests | ✅ 330 passing (244 + 33 + 53) |
+
+**Deviations from plan**
+
+- **The 1-year range charts every metric from the `Hour` tier** (its 365-day
+  window), not `DailyStatistics` — `DailyStatistics` holds session aggregates, not
+  a per-metric time series, so it cannot back a smooth line. The tier caption says
+  "Hourly averages" for the year range.
+- **`JsonExporter` writes numeric values as the data source's strings**, not JSON
+  numbers — the data source is the single authority on formatting/rounding, and
+  one representation avoids a class of precision/locale bugs. The JSON is still
+  valid and readable.
+- **Zoom is LiveCharts' built-in X pan/zoom (`ZoomMode`)**, not a custom
+  range-brush — it is what the library provides and it covers "zoom and tooltips".
+- **Custom date ranges are modelled (`HistoryRange.Custom`, `ResolveRange` honours
+  it) but the History page ships the five presets only** — a date-picker UI is a
+  small later addition; nothing downstream needs it yet.
+- **`ExportService` resolves the shell window through `App.ShellWindow` at call
+  time**, not by constructor injection — injecting `MainWindow` created a
+  construction-time cycle when the startup page is History.
+- **No `V002` migration** — every table used exists verbatim from `V001`.
 
 ---
 

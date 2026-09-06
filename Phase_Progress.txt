@@ -6,14 +6,15 @@ with exit criteria and deviations) and docs/traceability.md (requirement ->
 implementation -> test). This file is the fast orientation layer on top of those.
 
 ============================================================
-CURRENT STATUS: Phase 10 of 15 complete. Dashboard finished —
-8 cards on a responsive masonry grid, per-card info tooltips,
-every VM throttled to 1 Hz.
-Ready to start Phase 11 (History and reporting).
+CURRENT STATUS: Phase 11 of 15 complete. History and reporting
+finished — tier-aware History page (24h-1y, zoom, adaptive axis),
+CSV + JSON export behind IReportExporter, "delete all history" in
+Settings. Reporting project promoted from its stub.
+Ready to start Phase 12 (Diagnostics).
 ============================================================
 
 Solution builds clean (0 warnings, 0 errors) in Debug and Release.
-Test totals: 296 passing — 220 Tests.Unit, 33 Tests.Simulation, 43 Tests.Integration.
+Test totals: 330 passing — 244 Tests.Unit, 33 Tests.Simulation, 53 Tests.Integration.
 Verified live on the reference machine (Dell laptop, Windows 11 build 26200,
 battery DELL 68ND307 / SMP / LiP, 40.0% retention — this is a real worn battery,
 not an error, and is documented as the reference reading in capability-matrix.md).
@@ -599,22 +600,78 @@ Key deviations (see docs/roadmap.md Phase 10):
 - The hero card does not span multiple columns — column 1 like any other card.
 - The Today card reuses StatisticsViewModel at its default window.
 
-============================================================
-WHAT'S NEXT: PHASE 11 — History and reporting
-============================================================
-Per docs/roadmap.md: History page with 24h-1y + custom ranges, zoom and
-tooltips, tier-aware queries (raw -> minute -> hour -> daily by range),
-CsvExporter, JsonExporter behind IReportExporter, export scope selection, safe
-path handling.
-Depends on: Phases 3, 8 — all done. The SampleHour + DailyStatistics rollup
-producers landed in Phase 8; the History page consumes those tiers. The Reporting
-project is still a stub (promote it in Phase 11).
-Exit: a one-year range loads without stalling the UI; exports are
-spreadsheet-friendly (CSV) and human-readable (JSON).
+PHASE 11 — History and reporting (complete)
+------------------------------------------------------------
+The last read-side feature. Tier-aware History page + CSV/JSON export +
+"delete all history".
 
-The History page is already an honest "arrives in Phase 11" placeholder. The
-Statistics engine (StatisticsWindow.Custom + DateRange) already exists — Phase 11
-adds the range-picker UI + the tier-aware read layer + the exporters.
+What shipped:
+- Core.History.HistoryTierSelector (pure, unit-tested): TierForSpan(TimeSpan)
+  -> Raw(<=6h) / Minute(<=7d) / Hour(<=120d) / Daily; ResolveRange(HistoryRange,
+  now) -> DateRange. Enums HistoryTier/HistoryMetric/HistoryRange/[Flags]
+  ExportScope; models HistoryRequest/ExportRequest/ExportTable; seams
+  IHistoryReadStore / IExportDataSource / IReportExporter / IHistoryMaintenance
+  (Core-declared, Data+Reporting-implemented, same pattern as ISessionStore).
+- Reporting project PROMOTED from the ModuleMarker stub, stays plain net10.0
+  (Core-only ref — formatting is pure). CsvExporter: RFC 4180 quoting
+  (comma/quote/newline/edge-space -> quoted, "" doubled), \r\n, UTF-8 BOM,
+  "# <name>" section per table. JsonExporter: Utf8JsonWriter streaming
+  { exportedUtc, range, tables:{ "<name>":[ {col:value} ] } }, values as the
+  data source's strings. Both write incrementally to the stream.
+- Data.HistoryReadStore: tier picks table+column, one indexed range SELECT,
+  MinMaxDownsampler bounds to the point budget (800) -> ChartSeries.
+  GetExtentAsync, HasTemperatureDataAsync. Data.ExportDataSource: one
+  range-filtered SELECT per scope flag, values invariant-stringified, enum
+  columns as names. Data.HistoryMaintenance: DELETE per telemetry/session/
+  health/insight/alert table in a txn, then VACUUM (the one sanctioned VACUUM);
+  BatteryDevice/AppSettings/DataRetentionSettings/SchemaMigration kept.
+- Controls/PowerChart extended: XLabelFormat DP (or auto — HH:mm:ss / HH:mm /
+  ddd HH:mm / d MMM / MMM yyyy from the visible span, matching tick spacing);
+  EnableZoom DP -> ZoomMode=X + double-tap reset. Both off by default so Power
+  and Temperature pages are unchanged.
+- ViewModels/HistoryViewModel: range + metric Segmenteds, ChartSeries + window,
+  tier caption, loading/empty/"no temperature sensor" states, export-scope
+  checklist, ExportCsv/Json commands. Services/ExportService: FileSavePicker via
+  InitializeWithWindow (shell window resolved lazily through App.ShellWindow —
+  NOT ctor-injected, that made a construction cycle when the startup page is
+  History), then a plain FileStream to the picked path. Views/HistoryPage
+  rebuilt in the card language.
+- Settings gains a DATA section: data folder + "Delete all battery history"
+  behind a ContentDialog requiring the typed word DELETE
+  (SettingsViewModel.DeleteAllHistoryAsync -> IHistoryMaintenance).
+- Diagnostics Storage section gains a "History extent" row (earliest -> latest).
+
+Verified live on the reference machine (2026-09-06): app launched with the
+startup page forced to History — started clean, no crash, no LayoutCycle, no
+errors; the tier-aware query ran silently against ~1.3 days of real data
+(24h/7d -> minute averages, 30/90d -> hourly, 1y -> hour-tier fallback);
+Temperature metric shows the "no sensor" empty state (reference machine has no
+battery temperature sensor). Builds clean Debug + Release; 330 tests pass
+(244 + 33 + 53). Export via the OS picker is code-complete but not
+automation-verified (picker needs a human click).
+
+Key deviations (see docs/roadmap.md Phase 11):
+- 1-year range charts every metric from the Hour tier (DailyStatistics holds
+  session aggregates, not a per-metric time series). Tier caption says so.
+- JsonExporter writes numeric values as the data source's strings, not JSON
+  numbers (one lossless representation; avoids precision/locale bugs).
+- Zoom is LiveCharts' built-in X pan/zoom, not a custom range-brush.
+- HistoryRange.Custom is modelled + ResolveRange honours it, but the page ships
+  the five presets only — a date-picker UI is a small later add.
+- ExportService resolves the shell window via App.ShellWindow at call time.
+- No V002 migration — every table used exists verbatim from V001.
+
+============================================================
+WHAT'S NEXT: PHASE 12 — Diagnostics
+============================================================
+Per docs/roadmap.md: live capability matrix rendering, monitoring state per
+subsystem with last error, database statistics, log viewer, "Copy diagnostics",
+About page with versions/licenses/privacy/estimation methodology.
+Depends on: all prior phases — done. Much of the Diagnostics page already exists
+(system/app/storage/battery/alerts sections, Copy diagnostics, History extent);
+Phase 12 adds per-subsystem monitoring state + last error, and a log viewer.
+Exit: every unavailable capability visible with its reason; copied diagnostics
+contain no personal data.
 
 ============================================================
 PROJECT STRUCTURE QUICK MAP (for when you do need to open files)
@@ -644,13 +701,20 @@ src/BatteryIntelligence.Analytics — AnalyticsService + RuntimeEstimationServic
     ChargingQualityScorer, DischargeAnalyzer, RuntimeEstimator, StatisticsEngine,
     RuleBasedInsightProvider, LinearFit, RollingRate live in Core.Analytics.
     Core-only reference (infra sibling). Plain net10.0 — analytics is arithmetic.
+src/BatteryIntelligence.Notifications — AlertEngine + AlertMonitoringService.
+    Plain net10.0; the one Windows API (AppNotificationManager) lives in the App's
+    WindowsToastPresenter behind Core's INotificationPresenter. Promoted Phase 9.
+src/BatteryIntelligence.Reporting — CsvExporter + JsonExporter behind
+    Core's IReportExporter. Plain net10.0, Core-only ref — pure formatting over
+    the already-stringified ExportTable; never touches SQLite. Promoted Phase 11.
 src/BatteryIntelligence.App           — WinUI 3 shell, Views, ViewModels, composition root (App.xaml.cs).
     Resources/AppTheme.xaml holds the Claude Design tokens; Controls/{Segmented,
     CardHeader,MetricStat,Sparkline,ToggleRow,ColumnGrid} are the design primitives;
     Controls/PowerChart is the only file touching LiveChartsCore;
-    Services/WindowsToastPresenter is the only file touching AppNotificationManager.
-src/BatteryIntelligence.{Notifications,Reporting}
-    — stub projects, not yet implemented (their phases are 9,11 respectively)
+    Services/WindowsToastPresenter is the only file touching AppNotificationManager;
+    Services/ExportService is the only file touching the file-save picker.
+    Data-side history reads: Data/HistoryReadStore, Data/ExportDataSource,
+    Data/HistoryMaintenance (Phase 11).
 tests/BatteryIntelligence.Tests.Unit         — pure logic, net10.0, fast.
     Includes Sessions/SessionStateMachineTests.cs — the full scenario matrix.
 tests/BatteryIntelligence.Tests.Simulation   — scripted hardware scenarios, net10.0-windows,

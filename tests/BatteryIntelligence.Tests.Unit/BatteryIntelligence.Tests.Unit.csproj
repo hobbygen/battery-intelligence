@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\BatteryIntelligence.Core\BatteryIntelligence.Core.csproj" />
     <ProjectReference Include="..\..\src\BatteryIntelligence.Data\BatteryIntelligence.Data.csproj" />
+    <ProjectReference Include="..\..\src\BatteryIntelligence.Reporting\BatteryIntelligence.Reporting.csproj" />
   </ItemGroup>
 
 </Project>

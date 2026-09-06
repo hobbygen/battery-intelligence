@@ -1,6 +1,6 @@
 # Requirements Traceability Matrix
 
-Status: updated after Phase 10. Version 1.0.0.
+Status: updated after Phase 11. Version 1.0.0.
 
 Covers spec §70: requirement → module → implementation → test → status.
 
@@ -89,14 +89,14 @@ Covers spec §70: requirement → module → implementation → test → status.
 |---|---|---|---|---|---|---|
 | R-060 | SQLite, local only | §27, §33 | Data | `%LocalAppData%\BatteryIntelligence\battery.db`, resolved via `ISettingsService.Current.Data.DatabaseDirectory` | Live: file created with `-wal`/`-shm` siblings on the reference machine | ✅ |
 | R-061 | Full entity set | §27, §28 | Data | 18 tables, `V001__InitialSchema.sql` | `MigrationTests.MigrateAsync_OnFreshDatabase_CreatesEveryTable` | ✅ |
-| R-062 | Indexed time / battery / session | §32 | Data | Indexes per `database.md` §4, transcribed verbatim into V001 | Covered by schema-creation test; query-plan `EXPLAIN` assertions deferred to a phase with enough data to matter | 🔨 |
+| R-062 | Indexed time / battery / session | §32 | Data | Indexes per `database.md` §4, transcribed verbatim into V001; exercised by the Phase 11 History tier reads (`WHERE <time> IN [from, to)` on the indexed time column of each tier) | Covered by schema-creation test; `HistoryReadStoreTests` exercise the indexed range scans; query-plan `EXPLAIN` assertions still deferred | 🔨 |
 | R-063 | Batched, async writes | §32, §66 | Data | `BatterySampleWriteQueue`: 200-row / 30 s / explicit-flush triggers, one prepared statement reused per batch | `BatterySampleWriteQueueTests` (4 tests) | ✅ |
 | R-064 | WAL mode | §32 | Data | Pragmas applied on every connection (`SqliteConnectionFactory`) | `MigrateAsync_AppliesTheDocumentedPragmas`; live: `-wal`/`-shm` files present | ✅ |
 | R-065 | UI never blocks on DB | §32 | Data, App | `BatteryPersistenceBridge.Enqueue` returns immediately; DB access confined to the write queue's own timer/task | Live: Battery page remained responsive with pending writes queued | ✅ |
 | R-066 | Versioned migrations, no history loss | §64 | Data | `DatabaseMigrator`: transactional per-migration apply, backup from the second migration onward, rollback on failure | `MigrationTests` (idempotency, version recording). **Deviation:** backup-before-migration untested — no V002 exists yet to exercise it (see `roadmap.md` Phase 3 deviations) | 🔨 |
 | R-067 | Tiered aggregation | §31 | Data | `DatabaseMaintenanceService`: minute → hour → daily rollup, each idempotent and gated on the tier below being settled; `DailyStatistics` from closed sessions. Minute/hour/daily retention now enforced | `RunRollupAsync_*` (minute), `RunRollupAsync_RollsSettledHours_IntoSampleHour_*`, `RunRollupAsync_RollsFullyElapsedDays_IntoDailyStatistics_*`, `…DoesNotRollToday_*` | ✅ |
 | R-068 | Retention, no active-session deletion | §29 | Data | Deletes only rolled-up + past-window rows; open-session guard | `RunRetentionAsync_NeverDeletesARowInAnOpenSession`, `RunRetentionAsync_DeletesOldSamples_OnlyAfterTheyAreRolledUp` | ✅ |
-| R-069 | Delete all history with confirmation | §29 | App, Data | Settings action + `VACUUM` | Manual | 📋 (Phase 11/Settings UI) |
+| R-069 | Delete all history with confirmation | §29 | App, Data | `IHistoryMaintenance` / `HistoryMaintenance` — `DELETE FROM` per telemetry table in a transaction, then `VACUUM`; Settings "DATA" section, `ContentDialog` requiring the word `DELETE` | `HistoryMaintenanceTests` (tables emptied, device + schema survive) | ✅ |
 | R-070 | Reject impossible measurements | §63 | Core | `BatterySentinels` (raw sentinel values), `BatterySampleValidation` (plausibility ranges), `PercentageJumpDetector` (awake jump check, Phase 4 — applied in both `BatteryMonitoringService` for sample grading and `SessionStateMachine` for session semantics), and `SessionStateMachine`'s backwards-clock rejection (Phase 4, the monotonic-timestamp guard) | `BatterySentinelsTests`, `BatterySampleValidationTests`, `PercentageJumpDetectorTests`, `SessionStateMachineTests.ClockStepsBackwards_Rejected_SessionPreserved` | ✅ (battery domain) |
 | R-071 | Settings treated as untrusted input | §46 | Core, Data | `AppSettings.Validate()` clamping; corrupt file preserved, defaults used | `SettingsValidationTests`, `JsonSettingsServiceTests` | ✅ |
 
@@ -120,7 +120,7 @@ Covers spec §70: requirement → module → implementation → test → status.
 | R-093 | Empty states explain why | §43 | App | Per-page states with reasons | Manual + unit on state selection | 📋 |
 | R-094 | Not colour alone | §39 | App | Colour + icon + label | Manual incl. high contrast | 📋 |
 | R-095 | Estimation transparency on hover | §76 | App | `CardHeader.Info` ⓘ tooltip on every dashboard card; each estimated page (App Usage "How this is estimated", Battery "How this score is calculated", About methodology) carries its own explanation | Live: dashboard card tooltips + About methodology card | 🔨 (dashboard + About done; per-value hover on other pages later) |
-| R-096 | CSV + JSON export | §36 | Reporting | `IReportExporter` impls | Unit + manual | 📋 |
+| R-096 | CSV + JSON export | §36 | Reporting, Data, App | `CsvExporter` (RFC 4180, BOM, `\r\n`) + `JsonExporter` (`Utf8JsonWriter`) behind `IReportExporter`, driven by `IExportDataSource` (per-scope range-filtered `SELECT`s, enums as names); `ExportService` = OS `FileSavePicker` → `FileStream`; scope checklist on the History page | `CsvExporterTests`, `JsonExporterTests`, `ExportDataSourceTests`; live export via picker | ✅ |
 | R-097 | Structured logging, rotated | §48 | all | Serilog, 8 MB cap, 14-file retention | Log file written and rotating | ✅ |
 | R-098 | Graceful subsystem failure | §44 | all | Healthy→Retrying→Degraded | Simulation: each provider fails | 📋 |
 | R-099 | Performance budgets | §45 | all | Batched writes (all queues); every dashboard view model coalesces UI updates to 1 Hz (`MinRefreshInterval`) regardless of sampling rate. Adaptive sampling + the 24 h soak are Phase 13 | `ResponsiveColumnsTests`; live: dashboard repaints at ~1 Hz with `PowerSampleSeconds = 1` | 🔨 (throttling done; adaptive sampling + soak Phase 13) |

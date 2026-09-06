@@ -5,6 +5,13 @@
     <RootNamespace>BatteryIntelligence.Reporting</RootNamespace>
   </PropertyGroup>
 
+  <!--
+    Plain net10.0 with a Core-only reference: the exporters are pure formatting
+    over the already-stringified ExportTable model. They never touch SQLite (the
+    Data-side IExportDataSource does that) and never interpret a column's meaning
+    (docs/architecture.md section 7, "IReportExporter"), so Reporting stays an
+    infrastructure sibling like Analytics and Notifications.
+  -->
   <ItemGroup>
     <ProjectReference Include="..\BatteryIntelligence.Core\BatteryIntelligence.Core.csproj" />
   </ItemGroup>

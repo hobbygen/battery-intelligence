@@ -55,7 +55,22 @@ public sealed partial class PowerChart : UserControl
         nameof(ThresholdLabel), typeof(string), typeof(PowerChart),
         new PropertyMetadata(string.Empty, OnChanged));
 
+    /// <summary>
+    /// An explicit .NET date/time format for the X axis and tooltip. Empty (the
+    /// default) means adapt to the visible span — seconds for a minute-wide
+    /// window, months for a year-wide one (used by the History page).
+    /// </summary>
+    public static readonly DependencyProperty XLabelFormatProperty = DependencyProperty.Register(
+        nameof(XLabelFormat), typeof(string), typeof(PowerChart),
+        new PropertyMetadata(string.Empty, OnChanged));
+
+    /// <summary>When true, the X axis can be scrolled and pinch/wheel-zoomed; double-tap resets. Off by default.</summary>
+    public static readonly DependencyProperty EnableZoomProperty = DependencyProperty.Register(
+        nameof(EnableZoom), typeof(bool), typeof(PowerChart),
+        new PropertyMetadata(false, OnChanged));
+
     private readonly CartesianChart _chart;
+    private string _activeFormat = "HH:mm:ss";
 
     public PowerChart()
     {
@@ -70,6 +85,15 @@ public sealed partial class PowerChart : UserControl
 
         ActualThemeChanged += (_, _) => Render();
         Loaded += (_, _) => Render();
+
+        // Double-tap resets a zoomed/panned X axis back to the full window.
+        DoubleTapped += (_, _) =>
+        {
+            if (EnableZoom)
+            {
+                Render();
+            }
+        };
     }
 
     public ChartSeries? Series
@@ -114,11 +138,27 @@ public sealed partial class PowerChart : UserControl
         set => SetValue(ThresholdLabelProperty, value);
     }
 
+    public string XLabelFormat
+    {
+        get => (string)GetValue(XLabelFormatProperty);
+        set => SetValue(XLabelFormatProperty, value);
+    }
+
+    public bool EnableZoom
+    {
+        get => (bool)GetValue(EnableZoomProperty);
+        set => SetValue(EnableZoomProperty, value);
+    }
+
     private static void OnChanged(DependencyObject d, DependencyPropertyChangedEventArgs e) =>
         ((PowerChart)d).Render();
 
     private void Render()
     {
+        _chart.ZoomMode = EnableZoom
+            ? LiveChartsCore.Measure.ZoomAndPanMode.X
+            : LiveChartsCore.Measure.ZoomAndPanMode.None;
+
         ChartSeries? series = Series;
         TitleText.Text = series is null ? string.Empty : $"{series.Label} ({series.Unit})";
 
@@ -152,6 +192,10 @@ public sealed partial class PowerChart : UserControl
         IReadOnlyList<TimePoint> points = series!.Points;
         DateTimePoint[] values = [.. points.Select(p => new DateTimePoint(p.TimestampUtc.LocalDateTime, p.Value))];
 
+        DateTimeOffset start = RangeStartUtc == DateTimeOffset.MinValue ? points[0].TimestampUtc : RangeStartUtc;
+        DateTimeOffset end = RangeEndUtc == DateTimeOffset.MinValue ? points[^1].TimestampUtc : RangeEndUtc;
+        _activeFormat = string.IsNullOrEmpty(XLabelFormat) ? FormatForSpan(end - start) : XLabelFormat;
+
         _chart.Series =
         [
             new LineSeries<DateTimePoint>
@@ -162,20 +206,18 @@ public sealed partial class PowerChart : UserControl
                 LineSmoothness = 0,
                 Stroke = new SolidColorPaint(stroke, 2),
                 Fill = null,
-                XToolTipLabelFormatter = point => new DateTime((long)point.Coordinate.SecondaryValue).ToString("HH:mm:ss", CultureInfo.CurrentCulture),
+                XToolTipLabelFormatter = point => new DateTime((long)point.Coordinate.SecondaryValue).ToString(_activeFormat, CultureInfo.CurrentCulture),
                 YToolTipLabelFormatter = point => $"{point.Coordinate.PrimaryValue:N0} {series.Unit}",
             },
         ];
-
-        DateTimeOffset start = RangeStartUtc == DateTimeOffset.MinValue ? points[0].TimestampUtc : RangeStartUtc;
-        DateTimeOffset end = RangeEndUtc == DateTimeOffset.MinValue ? points[^1].TimestampUtc : RangeEndUtc;
 
         _chart.XAxes =
         [
             new Axis
             {
                 Labeler = value => TicksToLabel(value),
-                UnitWidth = TimeSpan.FromSeconds(1).Ticks,
+                UnitWidth = UnitWidthForSpan(end - start).Ticks,
+                MinStep = UnitWidthForSpan(end - start).Ticks,
                 MinLimit = start.LocalDateTime.Ticks,
                 MaxLimit = end.LocalDateTime.Ticks,
                 TextSize = 11,
@@ -231,7 +273,7 @@ public sealed partial class PowerChart : UserControl
             $"Range {min:N0} to {max:N0} {series.Unit}.");
     }
 
-    private static string TicksToLabel(double value)
+    private string TicksToLabel(double value)
     {
         long ticks = (long)value;
         if (ticks < DateTime.MinValue.Ticks || ticks > DateTime.MaxValue.Ticks)
@@ -239,6 +281,26 @@ public sealed partial class PowerChart : UserControl
             return string.Empty;
         }
 
-        return new DateTime(ticks).ToString("HH:mm:ss", CultureInfo.CurrentCulture);
+        return new DateTime(ticks).ToString(_activeFormat, CultureInfo.CurrentCulture);
     }
+
+    /// <summary>A .NET date/time format legible for a window of the given width.</summary>
+    private static string FormatForSpan(TimeSpan span) => span.TotalMinutes switch
+    {
+        <= 2 => "HH:mm:ss",
+        <= 120 => "HH:mm",
+        <= 3 * 24 * 60 => "ddd HH:mm",
+        <= 60 * 24 * 60 => "d MMM",
+        _ => "MMM yyyy",
+    };
+
+    /// <summary>The tick spacing that keeps the axis readable for a window of the given width.</summary>
+    private static TimeSpan UnitWidthForSpan(TimeSpan span) => span.TotalMinutes switch
+    {
+        <= 2 => TimeSpan.FromSeconds(1),
+        <= 120 => TimeSpan.FromMinutes(1),
+        <= 3 * 24 * 60 => TimeSpan.FromHours(1),
+        <= 60 * 24 * 60 => TimeSpan.FromDays(1),
+        _ => TimeSpan.FromDays(30),
+    };
 }

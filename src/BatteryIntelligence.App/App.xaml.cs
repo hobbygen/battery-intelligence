@@ -15,6 +15,7 @@ using BatteryIntelligence.Data.Settings;
 using BatteryIntelligence.Data.Sqlite;
 using BatteryIntelligence.Power;
 using BatteryIntelligence.ProcessMonitoring;
+using BatteryIntelligence.Reporting;
 using BatteryIntelligence.Sessions;
 using BatteryIntelligence.Thermal;
 using BatteryIntelligence.Windows;
@@ -62,6 +63,13 @@ public partial class App : Application
     public static IServiceProvider Services =>
         ((App)Current)._host?.Services
         ?? throw new InvalidOperationException("The host has not been built yet.");
+
+    /// <summary>
+    /// The shell window once it exists, for the few services that need a window
+    /// handle (e.g. a file-save picker). Resolved lazily rather than injected, so
+    /// nothing built during the window's own construction takes a dependency on it.
+    /// </summary>
+    internal static MainWindow? ShellWindow => (Current as App)?._window;
 
     /// <inheritdoc/>
     protected override void OnLaunched(LaunchActivatedEventArgs args)
@@ -313,6 +321,15 @@ public partial class App : Application
         services.AddSingleton<IAlertMonitoringService>(sp => sp.GetRequiredService<AlertMonitoringService>());
         services.AddHostedService(sp => sp.GetRequiredService<AlertMonitoringService>());
 
+        // History and reporting (Phase 11) — all read-side. The two exporters are
+        // resolved together as IEnumerable<IReportExporter> by the History VM.
+        services.AddSingleton<IHistoryReadStore, HistoryReadStore>();
+        services.AddSingleton<IExportDataSource, ExportDataSource>();
+        services.AddSingleton<IHistoryMaintenance, HistoryMaintenance>();
+        services.AddSingleton<IReportExporter, CsvExporter>();
+        services.AddSingleton<IReportExporter, JsonExporter>();
+        services.AddSingleton<ExportService>();
+
         // View models
         services.AddSingleton<ShellViewModel>();
         services.AddTransient<SettingsViewModel>();
@@ -326,6 +343,7 @@ public partial class App : Application
         services.AddTransient<InsightsViewModel>();
         services.AddTransient<AlertsViewModel>();
         services.AddTransient<AboutViewModel>();
+        services.AddTransient<HistoryViewModel>();
     }
 
     private void OnWindowClosed(object sender, WindowEventArgs args)

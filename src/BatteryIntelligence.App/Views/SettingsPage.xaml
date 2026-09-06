@@ -125,7 +125,7 @@
                         </Grid.ColumnDefinitions>
                         <FontIcon Grid.Column="0" VerticalAlignment="Top" FontSize="19" Foreground="{ThemeResource AppOkBrush}" Glyph="&#xE72E;" />
                         <StackPanel Grid.Column="1" Spacing="4">
-                            <TextBlock Foreground="{ThemeResource AppText2Brush}" TextWrapping="Wrap" Text="All readings stay on this device. No account, no cloud sync, no telemetry. Export and delete controls arrive with reporting in Phase 11." />
+                            <TextBlock Foreground="{ThemeResource AppText2Brush}" TextWrapping="Wrap" Text="All readings stay on this device. No account, no cloud sync, no telemetry. Export your history from the History page." />
                             <TextBlock
                                 IsTextSelectionEnabled="True"
                                 Style="{StaticResource MetricLabelTextStyle}"
@@ -133,6 +133,57 @@
                                 TextWrapping="Wrap" />
                         </StackPanel>
                     </Grid>
+                </Border>
+            </StackPanel>
+
+            <!-- Data -->
+            <StackPanel Spacing="10">
+                <TextBlock Style="{StaticResource CardKickerTextStyle}" Text="DATA" />
+                <Border Style="{StaticResource CardBorderStyle}" Padding="0">
+                    <StackPanel>
+                        <Grid Style="{StaticResource SettingRowGrid}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0" FontSize="19" Foreground="{ThemeResource AppAccentBrush}" Glyph="&#xE8B7;" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock FontSize="13.5" Text="Data folder" />
+                                <TextBlock
+                                    IsTextSelectionEnabled="True"
+                                    Style="{StaticResource MetricLabelTextStyle}"
+                                    Text="{x:Bind ViewModel.DataDirectory}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Style="{StaticResource SettingRowGrid}" BorderThickness="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0" FontSize="19" Foreground="{ThemeResource AppCritBrush}" Glyph="&#xE74D;" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock FontSize="13.5" Text="Delete all battery history" />
+                                <TextBlock Style="{StaticResource MetricLabelTextStyle}" TextWrapping="Wrap" Text="Permanently removes every sample, session, health snapshot, insight and alert. Your device and settings are kept. This cannot be undone." />
+                            </StackPanel>
+                            <Button
+                                Grid.Column="2"
+                                VerticalAlignment="Center"
+                                AutomationProperties.Name="Delete all battery history"
+                                Click="OnDeleteAllHistoryClick"
+                                Content="Delete…" />
+                        </Grid>
+
+                        <InfoBar
+                            x:Name="DeleteResultBar"
+                            Margin="16,0,16,14"
+                            IsClosable="True"
+                            IsOpen="False"
+                            Severity="Informational" />
+                    </StackPanel>
                 </Border>
             </StackPanel>
 
