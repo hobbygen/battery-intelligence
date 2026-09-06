@@ -32,6 +32,7 @@ public sealed class DatabaseMaintenanceService : IHostedService, IDisposable
     private static readonly TimeSpan RollupInterval = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan RetentionInterval = TimeSpan.FromHours(1);
     private static readonly TimeSpan RollupSafetyMargin = TimeSpan.FromMinutes(2);
+    private const long DayMs = 86_400_000;
 
     private readonly ISqliteConnectionFactory _connectionFactory;
     private readonly ISettingsService _settings;
@@ -113,6 +114,8 @@ public sealed class DatabaseMaintenanceService : IHostedService, IDisposable
             {
                 _logger.LogDebug("Rolled {Count} minute bucket(s) into SampleMinute.", rolled);
             }
+
+            await RollUpApplicationUsageAsync(connection, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is SqliteException or IOException or UnauthorizedAccessException)
         {
@@ -121,6 +124,55 @@ public sealed class DatabaseMaintenanceService : IHostedService, IDisposable
         finally
         {
             _rollupGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Idempotently rolls fully-elapsed days of <c>ProcessSample</c> rows into the
+    /// daily <c>ApplicationUsage</c> aggregate (docs/database.md section 4;
+    /// docs/roadmap.md Phase 7). A day already present for an application key is
+    /// never recomputed, and only days strictly before today are considered, so a
+    /// still-accumulating day is never summarised early.
+    /// </summary>
+    private async Task RollUpApplicationUsageAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        long todayStartMs = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / DayMs) * DayMs;
+        int cadenceSeconds = Math.Max(1, _settings.Current.Monitoring.ProcessSampleSeconds);
+
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO ApplicationUsage
+                (DayUtc, ApplicationKey, DisplayName, TotalSeconds, ForegroundSeconds,
+                 AvgCpuPercent, EstimatedEnergyMwh, EstimatorVersion)
+            SELECT
+                (ps.TimestampUtc / 86400000) * 86400000 AS DayUtc,
+                ps.ApplicationKey,
+                (SELECT ps2.ProcessName FROM ProcessSample ps2
+                 WHERE ps2.ApplicationKey = ps.ApplicationKey
+                   AND (ps2.TimestampUtc / 86400000) = (ps.TimestampUtc / 86400000)
+                 ORDER BY ps2.TimestampUtc DESC LIMIT 1),
+                COUNT(*) * $cadence,
+                SUM(CASE WHEN ps.IsForeground = 1 THEN 1 ELSE 0 END) * $cadence,
+                AVG(ps.CpuPercent),
+                CAST(ROUND(SUM(COALESCE(ps.EstimatedPowerMw, 0)) * $cadence / 3600.0) AS INTEGER),
+                MAX(ps.EstimatorVersion)
+            FROM ProcessSample ps
+            WHERE (ps.TimestampUtc / 86400000) * 86400000 < $todayStart
+              AND ps.ApplicationKey <> '__baseline__'
+              AND NOT EXISTS (
+                  SELECT 1 FROM ApplicationUsage au
+                  WHERE au.DayUtc = (ps.TimestampUtc / 86400000) * 86400000
+                    AND au.ApplicationKey = ps.ApplicationKey
+              )
+            GROUP BY DayUtc, ps.ApplicationKey;
+            """;
+        command.Parameters.AddWithValue("$cadence", cadenceSeconds);
+        command.Parameters.AddWithValue("$todayStart", todayStartMs);
+
+        int rolled = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        if (rolled > 0)
+        {
+            _logger.LogDebug("Rolled {Count} application/day row(s) into ApplicationUsage.", rolled);
         }
     }
 
@@ -187,6 +239,31 @@ public sealed class DatabaseMaintenanceService : IHostedService, IDisposable
                     temperatureDeleted = await deleteTemperature.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 }
 
+                int processDeleted;
+                await using (SqliteCommand deleteProcess = connection.CreateCommand())
+                {
+                    // ProcessSample feeds the daily ApplicationUsage rollup, so a
+                    // raw row is only dropped once its day is summarised for that
+                    // application key — and never while it belongs to an open
+                    // session (docs/roadmap.md Phase 7; docs/database.md section 6).
+                    deleteProcess.Transaction = transaction;
+                    deleteProcess.CommandText = """
+                        DELETE FROM ProcessSample
+                        WHERE TimestampUtc < $cutoff
+                          AND (SessionId IS NULL OR SessionId NOT IN (SELECT Id FROM BatterySession WHERE EndUtc IS NULL))
+                          AND (
+                              ApplicationKey = '__baseline__'
+                              OR EXISTS (
+                                  SELECT 1 FROM ApplicationUsage au
+                                  WHERE au.DayUtc = (ProcessSample.TimestampUtc / 86400000) * 86400000
+                                    AND au.ApplicationKey = ProcessSample.ApplicationKey
+                              )
+                          );
+                        """;
+                    deleteProcess.Parameters.AddWithValue("$cutoff", rawCutoffMs);
+                    processDeleted = await deleteProcess.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                }
+
                 await using (SqliteCommand upsertSettings = connection.CreateCommand())
                 {
                     upsertSettings.Transaction = transaction;
@@ -210,11 +287,11 @@ public sealed class DatabaseMaintenanceService : IHostedService, IDisposable
 
                 await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
-                if (deleted > 0 || powerDeleted > 0 || temperatureDeleted > 0)
+                if (deleted > 0 || powerDeleted > 0 || temperatureDeleted > 0 || processDeleted > 0)
                 {
                     _logger.LogInformation(
-                        "Retention removed {BatteryCount} battery, {PowerCount} power and {TempCount} temperature sample row(s) older than {Days} day(s).",
-                        deleted, powerDeleted, temperatureDeleted, data.RawRetentionDays);
+                        "Retention removed {BatteryCount} battery, {PowerCount} power, {TempCount} temperature and {ProcessCount} process sample row(s) older than {Days} day(s).",
+                        deleted, powerDeleted, temperatureDeleted, processDeleted, data.RawRetentionDays);
                 }
             }
             catch

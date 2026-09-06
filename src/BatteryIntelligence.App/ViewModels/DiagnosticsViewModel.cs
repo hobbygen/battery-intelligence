@@ -157,6 +157,10 @@ public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
                 database.TemperatureSampleRowCount.ToString("N0", CultureInfo.InvariantCulture),
                 "TemperatureSample — empty on hardware with no sensor"));
             entries.Add(new DiagnosticEntry(
+                "Process sample rows",
+                database.ProcessSampleRowCount.ToString("N0", CultureInfo.InvariantCulture),
+                "ProcessSample — one row per ranked application per 10 s tick"));
+            entries.Add(new DiagnosticEntry(
                 "Last write",
                 database.LastWriteUtc is DateTimeOffset lastWrite ? DescribeAgo(lastWrite) : "Not written yet this session",
                 "Write queue"));

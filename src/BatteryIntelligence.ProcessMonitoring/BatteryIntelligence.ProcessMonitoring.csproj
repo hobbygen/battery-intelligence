@@ -5,7 +5,23 @@
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>BatteryIntelligence.ProcessMonitoring</RootNamespace>
     <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+
+  <!--
+    Core-only reference by design: an infrastructure sibling of Battery and Data
+    (docs/architecture.md section 3), exactly like the Power and Thermal projects.
+    It consumes IProcessEnumerator, IBatteryMonitoringService,
+    ISessionMonitoringService and IProcessSampleWriteQueue — all declared in Core
+    — so it never references those projects directly. Process attribution is a
+    permanent estimation model (docs/estimation-strategy.md section 5): Windows
+    exposes measured per-process energy only via SRUM, which needs admin, and
+    spec section 23 forbids requiring elevation.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\BatteryIntelligence.Core\BatteryIntelligence.Core.csproj" />

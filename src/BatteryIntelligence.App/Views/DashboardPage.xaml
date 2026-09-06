@@ -153,14 +153,37 @@
                     </Border>
                 </StackPanel>
 
-                <!-- Phase-gated cards -->
-                <StackPanel Spacing="10">
-                    <controls:CardHeader Glyph="&#xE71D;" Text="APPLICATION USAGE" />
-                    <controls:EmptyStateView
-                        Glyph="&#xE71D;"
-                        Title="Not measured yet"
-                        Description="Per-application battery impact needs the process sampler and the estimation model that arrive in Phase 7. It will always carry an Estimated badge." />
-                </StackPanel>
+                <!-- Application usage -->
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="14">
+                        <controls:CardHeader Glyph="&#xE71D;" Text="APPLICATION USAGE" ActionText="Details" ActionInvoked="OnAppUsageCardAction" />
+
+                        <StackPanel Visibility="{x:Bind AppUsage.HasTopRow, Mode=OneWay}" Spacing="12">
+                            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Bottom">
+                                <TextBlock Style="{StaticResource SecondaryMetricTextStyle}" Text="{x:Bind AppUsage.TopRow.Name, Mode=OneWay}" />
+                                <Border Style="{StaticResource GradeBadgeAccentBorderStyle}">
+                                    <TextBlock Style="{StaticResource GradeBadgeTextStyle}" Foreground="{ThemeResource AppAccentDeepBrush}" Text="ESTIMATED" />
+                                </Border>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="30">
+                                <controls:MetricStat Label="Estimated draw" Value="{x:Bind AppUsage.TopRow.PowerText, Mode=OneWay}" />
+                                <controls:MetricStat Label="Share" Value="{x:Bind AppUsage.TopRow.ShareText, Mode=OneWay}" />
+                                <controls:MetricStat Label="CPU" Value="{x:Bind AppUsage.TopRow.CpuText, Mode=OneWay}" />
+                            </StackPanel>
+                            <ProgressBar Minimum="0" Maximum="100" Value="{x:Bind AppUsage.TopRow.BarPercent, Mode=OneWay}" />
+                            <TextBlock
+                                Style="{StaticResource MetricLabelTextStyle}"
+                                TextWrapping="Wrap"
+                                Text="{x:Bind AppUsage.ConfidenceText, Mode=OneWay}" />
+                        </StackPanel>
+
+                        <TextBlock
+                            Visibility="{x:Bind AppUsage.ShowLoading, Mode=OneWay}"
+                            Foreground="{ThemeResource AppText2Brush}"
+                            TextWrapping="Wrap"
+                            Text="Ranking the first process sample — this appears within a few seconds of launch." />
+                    </StackPanel>
+                </Border>
 
                 <StackPanel Spacing="10">
                     <controls:CardHeader Glyph="&#xE9D9;" Text="SMART INSIGHTS" />

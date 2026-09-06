@@ -62,6 +62,31 @@
             </StackPanel>
 
             <StackPanel Spacing="10">
+                <TextBlock Style="{StaticResource CardKickerTextStyle}" Text="ESTIMATION METHODOLOGY" />
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="12">
+                        <TextBlock Style="{StaticResource SecondaryMetricTextStyle}" FontSize="16" Text="Per-application battery impact — AppEnergyV1" />
+                        <TextBlock
+                            Foreground="{ThemeResource AppText2Brush}"
+                            TextWrapping="Wrap"
+                            Text="Windows exposes measured per-process energy only through the Energy Estimation Engine's SRUM database, which requires administrator rights. Battery Intelligence never requires elevation, so per-application figures are produced by a documented, versioned model — always labelled Estimated." />
+
+                        <TextBlock FontWeight="SemiBold" Text="How the estimate is built" />
+                        <TextBlock Foreground="{ThemeResource AppText2Brush}" TextWrapping="Wrap"
+                            Text="1. System budget — over each interval, the only ground truth is the measured battery draw: E_total = |battery power| × time. On AC there is no draw to divide, so absolute figures are reported as unavailable and applications are only ranked." />
+                        <TextBlock Foreground="{ThemeResource AppText2Brush}" TextWrapping="Wrap"
+                            Text="2. Non-attributable baseline — the display backlight, Wi-Fi and Bluetooth radios and chipset idle belong to no application. That baseline is separated first, learned from this device's own screen-on and screen-off idle draw, and shown as its own slice." />
+                        <TextBlock Foreground="{ThemeResource AppText2Brush}" TextWrapping="Wrap"
+                            Text="3. Weighted attribution — the remaining budget is divided among applications by an activity weight (CPU share, plus a small bonus for the foreground app). GPU and disk I/O terms exist in the model but are not observable without elevation on this build, so they contribute nothing here." />
+
+                        <TextBlock FontWeight="SemiBold" Text="What this does and does not claim" />
+                        <TextBlock Foreground="{ThemeResource AppText2Brush}" TextWrapping="Wrap"
+                            Text="It ranks applications by likely battery impact and apportions a measured total among them. It does not measure any single application's consumption — two applications with identical CPU time can differ substantially in real energy use, and none of the deciding factors (instruction mix, wake frequency, GPU work) is fully observable here. Shares always sum to 100% of the attributable budget, with the baseline shown separately so nothing is double-counted." />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <StackPanel Spacing="10">
                 <TextBlock Style="{StaticResource CardKickerTextStyle}" Text="PRIVACY" />
                 <Border Style="{StaticResource CardBorderStyle}">
                     <Grid ColumnSpacing="14">

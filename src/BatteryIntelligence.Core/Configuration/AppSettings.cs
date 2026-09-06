@@ -21,6 +21,8 @@ public sealed class AppSettings
 
     public MonitoringSettings Monitoring { get; set; } = new();
 
+    public ProcessMonitoringSettings Processes { get; set; } = new();
+
     public AlertSettings Alerts { get; set; } = new();
 
     public NotificationSettings Notifications { get; set; } = new();
@@ -44,6 +46,7 @@ public sealed class AppSettings
         General.Validate();
         Appearance.Validate();
         Monitoring.Validate();
+        Processes.Validate();
         Alerts.Validate();
         Notifications.Validate();
         Data.Validate();

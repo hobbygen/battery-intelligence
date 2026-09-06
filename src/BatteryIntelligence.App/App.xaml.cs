@@ -11,6 +11,7 @@ using BatteryIntelligence.Data;
 using BatteryIntelligence.Data.Settings;
 using BatteryIntelligence.Data.Sqlite;
 using BatteryIntelligence.Power;
+using BatteryIntelligence.ProcessMonitoring;
 using BatteryIntelligence.Sessions;
 using BatteryIntelligence.Thermal;
 using BatteryIntelligence.Windows;
@@ -225,6 +226,9 @@ public partial class App : Application
         services.AddSingleton<TemperatureSampleWriteQueue>();
         services.AddSingleton<ITemperatureSampleWriteQueue>(sp => sp.GetRequiredService<TemperatureSampleWriteQueue>());
         services.AddHostedService(sp => sp.GetRequiredService<TemperatureSampleWriteQueue>());
+        services.AddSingleton<ProcessSampleWriteQueue>();
+        services.AddSingleton<IProcessSampleWriteQueue>(sp => sp.GetRequiredService<ProcessSampleWriteQueue>());
+        services.AddHostedService(sp => sp.GetRequiredService<ProcessSampleWriteQueue>());
         services.AddHostedService<DatabaseMaintenanceService>();
         services.AddSingleton<IDatabaseDiagnosticsProvider, DatabaseDiagnosticsProvider>();
         services.AddHostedService<BatteryPersistenceBridge>();
@@ -267,6 +271,14 @@ public partial class App : Application
         services.AddSingleton<ITemperatureMonitoringService>(sp => sp.GetRequiredService<ThermalMonitoringService>());
         services.AddHostedService(sp => sp.GetRequiredService<ThermalMonitoringService>());
 
+        // Application usage (Phase 7) — its own slower cadence (the process
+        // sampler is the heaviest), registered after Sessions so the open
+        // session id and screen state are available for each persisted row.
+        services.AddSingleton<IProcessEnumerator, SystemProcessEnumerator>();
+        services.AddSingleton<ProcessMonitoringService>();
+        services.AddSingleton<IProcessMonitoringService>(sp => sp.GetRequiredService<ProcessMonitoringService>());
+        services.AddHostedService(sp => sp.GetRequiredService<ProcessMonitoringService>());
+
         // View models
         services.AddSingleton<ShellViewModel>();
         services.AddTransient<SettingsViewModel>();
@@ -275,6 +287,7 @@ public partial class App : Application
         services.AddTransient<SessionsViewModel>();
         services.AddTransient<PowerViewModel>();
         services.AddTransient<TemperatureViewModel>();
+        services.AddTransient<AppUsageViewModel>();
         services.AddTransient<AboutViewModel>();
     }
 

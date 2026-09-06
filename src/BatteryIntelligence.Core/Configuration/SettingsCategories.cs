@@ -84,6 +84,69 @@ public sealed class MonitoringSettings
     }
 }
 
+/// <summary>
+/// The <c>AppEnergyV1</c> per-application attribution model
+/// (docs/estimation-strategy.md section 5). Specification section 66 forbids
+/// hardcoded thresholds, so the weights live here — configuration, versioned with
+/// the model — not as constants in the estimator.
+/// </summary>
+public sealed class ProcessMonitoringSettings
+{
+    /// <summary>Weight on a process's share of CPU time. The reference weight (1.0).</summary>
+    public double WeightCpu { get; set; } = 1.0;
+
+    /// <summary>
+    /// Weight on GPU share. Configured and versioned, but not observed on this
+    /// build — GPU per-process telemetry needs ETW/admin (docs/api-strategy.md
+    /// section 3), so its contribution is currently zero.
+    /// </summary>
+    public double WeightGpu { get; set; } = 1.2;
+
+    /// <summary>Weight on I/O rate. Not observed on this build, same as GPU.</summary>
+    public double WeightIo { get; set; } = 0.3;
+
+    /// <summary>Weight added when a process owns the foreground window.</summary>
+    public double WeightForeground { get; set; } = 0.15;
+
+    /// <summary>
+    /// How many applications are ranked in full before the remainder collapse
+    /// into a single "Other" row (docs/monitoring-dataflow.md section 5).
+    /// </summary>
+    public int TopApplicationCount { get; set; } = 40;
+
+    /// <summary>
+    /// System CPU below this percentage while the screen is off means the sampler
+    /// skips the cycle entirely (docs/monitoring-dataflow.md section 5, item 5).
+    /// </summary>
+    public double IdleCpuFloorPercent { get; set; } = 3.0;
+
+    /// <summary>
+    /// Conservative default baseline draw in milliwatts, used until the model has
+    /// observed enough idle periods for this device. Split between platform idle
+    /// and display so the whole attribution can be marked Low confidence
+    /// (docs/estimation-strategy.md section 5, step 2).
+    /// </summary>
+    public int DefaultBaselineMw { get; set; } = 4_000;
+
+    public void Validate()
+    {
+        WeightCpu = Math.Clamp(WeightCpu, 0.0, 10.0);
+        WeightGpu = Math.Clamp(WeightGpu, 0.0, 10.0);
+        WeightIo = Math.Clamp(WeightIo, 0.0, 10.0);
+        WeightForeground = Math.Clamp(WeightForeground, 0.0, 10.0);
+        TopApplicationCount = Math.Clamp(TopApplicationCount, 5, 200);
+        IdleCpuFloorPercent = Math.Clamp(IdleCpuFloorPercent, 0.0, 100.0);
+        DefaultBaselineMw = Math.Clamp(DefaultBaselineMw, 0, 60_000);
+
+        // At least one activity term must carry weight, or every process would
+        // score identically and the ranking would be meaningless.
+        if (WeightCpu + WeightGpu + WeightIo <= 0.0)
+        {
+            WeightCpu = 1.0;
+        }
+    }
+}
+
 /// <summary>Alert thresholds. Specification sections 20 and 35, "Alerts".</summary>
 public sealed class AlertSettings
 {

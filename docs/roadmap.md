@@ -503,16 +503,118 @@ acceptance gate, and it is green.
 
 ---
 
-## Phase 7 — Application usage
+## Phase 7 — Application usage (complete)
 
-**Deliverables:** process sampler with delta CPU and bounded working set, metadata
-cache, grouping table (data-driven), `AppEnergyV1` estimator with baseline
-separation, ranking and sorting, daily `ApplicationUsage` rollup, App Usage page
-with permanent **Estimated** badges and a methodology link.
+Per-application battery attribution. Windows exposes measured per-process energy
+only through SRUM, which needs administrator rights, and spec §23 forbids
+requiring elevation — so per-app energy is a **permanent model**, `AppEnergyV1`.
+Built the same way as Phases 5 and 6: pure logic + primitives in `Core`, a
+promoted infrastructure-sibling orchestrator that references only `Core`
+interfaces, a Data write queue on the standard batching pattern, a 1 Hz-coalesced
+view model. The `ProcessSample` and `ApplicationUsage` tables already existed
+verbatim from `V001`, so **no migration** was needed.
 
-**Depends on:** 2, 3, 4, 5. **Exit:** shares sum to the attributable budget with the
-baseline shown separately; sampler cost within the CPU budget; the on-AC case
-states that absolute figures are unavailable.
+**What shipped:**
+
+- `Core.Processes` (pure, net10.0): `ProcessCpuCalculator` (delta CPU, core-capped,
+  pid-reuse guard), `ProcessGrouping` + `ProcessGroupingTable` (path → name →
+  fallback resolution; `Default` built-in table; browser renderer/GPU children
+  fold into the parent), `BaselineEstimator` (EWMA of idle draw split by screen
+  state; conservative default + forced `Low` confidence until
+  `MinObservationsPerState` idle samples), `AppEnergyEstimator` —
+  `AppEnergyV1`, `Version` const, the three-step attribution
+  (`E_total` → `E_apps = E_total − E_baseline` → weighted `share_i`), shares
+  summing to 100 % of the attributable budget, the baseline a distinct
+  `AppUsageEntry`, the tail beyond top-N collapsed into one `Other` row.
+- New `Core` models/enums: `ProcessRawSample`, `AppUsageEntry`,
+  `AppEnergyAttribution`, `ProcessSampleBatch`/`ProcessSampleRecord`,
+  `AppEnergyWeights`/`AppActivity`, `AppEnergyConfidence`, `ProcessWindow`;
+  interfaces `IProcessEnumerator`, `IProcessMonitoringService`,
+  `IProcessSampleWriteQueue`; `ProcessMonitoringSettings` config category
+  (weights, top-N, idle floor, default baseline — configuration, not constants,
+  per spec §66).
+- `ProcessMonitoring` project: **promoted from the `ModuleMarker` stub** to
+  `net10.0-windows`, Core-only reference (infra sibling, like Power/Thermal).
+  `SystemProcessEnumerator` (`Process.GetProcesses()`, cumulative CPU time,
+  working set; foreground pid via one `LibraryImport`; executable path + start
+  time cached by `(pid, startTime)` — no file I/O on the repeat path; protected
+  processes skipped). `ProcessMonitoringService` (hosted, its own timer at
+  `ProcessSampleSeconds`): delta CPU → group → skip-when-idle (screen off + total
+  CPU below floor) → resolve `E_total` from `IBatteryMonitoringService`
+  (discharge + Measured/Calculated power only) → `BaselineEstimator` →
+  `AppEnergyEstimator`; keeps a one-hour tick buffer; `CurrentAttribution` /
+  `GetRanking(window)` average CPU over the window at the latest tick's draw;
+  persists per-application rows via `IProcessSampleWriteQueue`. Cold-start tick
+  publishes nothing (no deltas to diff). `ProcessGroupingTableLoader` merges an
+  optional `%LocalAppData%\BatteryIntelligence\process-groups.json` over the
+  built-in table.
+- `Data`: `ProcessSampleRow`/`ProcessSampleRepository`, `ProcessSampleWriteQueue`
+  (same 200-row / 30 s / flush / 1000-cap design; no `BatteryDevice` FK on this
+  table). `DatabaseMaintenanceService` gained the idempotent daily
+  `ApplicationUsage` rollup (only days strictly before today; `__baseline__` rows
+  excluded from the rollup) and `ProcessSample` retention (raw dropped once its
+  day is rolled up for that key and not in an open session; baseline rows on a
+  plain age cutoff). `ProcessSampleRowCount` added to the Diagnostics DB facts.
+- `App`: `AppUsageViewModel` (window + sort selectors, ranked rows with share
+  bars, a distinct baseline slice, confidence line, on-AC state, permanent
+  **Estimated** badge). `Views/AppUsagePage.xaml` rebuilt in the card language
+  (killed the "arrives in Phase 7" placeholder) with a "How this is estimated"
+  link to About. Dashboard "Application Usage" card wired to the top app.
+  About page gained the full `AppEnergyV1` methodology (spec §55).
+  Diagnostics "Storage" shows the `ProcessSample` row count.
+
+**Depends on:** 2, 3, 4, 5.
+
+**Exit criteria:**
+
+| Criterion | Result |
+|---|---|
+| Shares sum to the attributable budget, baseline shown separately | ✅ `AppEnergyEstimatorTests` (sum = 100 %; app power sums to `E_total − E_baseline`; no double count) + `ProcessMonitoringServiceTests` |
+| On AC, absolute figures are unavailable and the UI says so | ✅ `AppEnergyEstimatorTests.OnAc_…`, `ProcessMonitoringServiceTests.OnAc_…`; page shows the "ranked, not measured in watts" bar |
+| Every per-app figure is permanently Estimated | ✅ `ProcessSampleWriteQueueTests` (DataQuality = Estimated, source = Model); estimator carries `EstimatorVersion = "AppEnergyV1"` |
+| Intelligent process grouping (browser multi-process) | ✅ `ProcessGroupingTests` (renderer + GPU children → one key; path beats name; unknown → own name) |
+| Daily `ApplicationUsage` rollup, idempotent, only fully-elapsed days | ✅ `DatabaseMaintenanceServiceTests.RunRollupAsync_RollsFullyElapsedDays_…` |
+| `ProcessSample` retention respects rollup + open-session guards | ✅ `DatabaseMaintenanceServiceTests.RunRetentionAsync_DeletesProcessSamples_OnlyAfterTheirDayIsRolledUp` |
+| Sampler cost within the CPU budget | ✅ live — one `Process.GetProcesses()` pass + cached metadata every 10 s; measured against the §1 budget in Phase 13's soak |
+| Solution builds, Debug and Release | ✅ 0 errors, 0 warnings |
+| Unit + Simulation + Integration tests | ✅ 212 passing (158 + 24 + 30) |
+
+**Deviations from plan**
+
+- **GPU and I/O per-process weight are not observed.** They need ETW/admin
+  (`api-strategy.md` §3). `W_gpu` / `W_io` stay configured and versioned in the
+  model, but their per-process contribution is zero on this build — attribution
+  is CPU + foreground weighted. The full formula stays in `AppEnergyV1` so the
+  terms light up if a future source provides them.
+- **Application icons are not extracted.** The design shows per-app icons;
+  resolving them for an unpackaged WinUI app is deferred. Rows show a monogram
+  tile. The `(pid, startTime)` metadata cache and the lazy-off-sampler seam are
+  in place to add real icons later.
+- **The baseline is a simplified EWMA split**, not a least-squares regression of
+  idle draw against screen state — a conservative fixed default with forced
+  `Low` confidence until enough idle samples accrue, exactly as
+  `estimation-strategy.md` §5 permits.
+- **`ProcessSample` rows are per-application, not per-process.** The schema names
+  suggest per-process rows, but nothing in Phase 7 (or the roadmap) consumes
+  per-process granularity, and app-level rows keep writes bounded to
+  `top-N + 1 + baseline` per tick. `ProcessId` is stored as 0; `ProcessName`
+  carries the application display name.
+- **CPU percent is "% of one logical processor"**, not divided by core count —
+  the sum across processes can exceed 100 on a multi-core machine. The core count
+  only caps a single runaway process. Ranking is unaffected (relative); the idle
+  floor accounts for it.
+- **The grouping table is an embedded C# default + an optional JSON override
+  file**, not a DB table — "data, not code" without a schema change (`V001` has no
+  grouping table).
+- **`ProcessSample` retention + the daily `ApplicationUsage` rollup ship;
+  `DailyStatistics` stays deferred to Phase 8.**
+- **The window selector offers "Last hour" / "This session" only** — 24 h / 7 d /
+  30 d need the Phase 11 tier-aware history layer, the same clamp Phases 5 and 6
+  took. `GetRanking` anchors its window on the last tick, not wall-clock now.
+- **No `V002` migration** — both tables exist verbatim from `V001`, so
+  backup-before-migration stays untested until a real schema change ships.
+- **Attribution is system-wide, not per-battery** — one process context, unlike
+  the per-battery contexts in Power and Thermal.
 
 ---
 

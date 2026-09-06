@@ -23,6 +23,12 @@ public static class AppPaths
     public const string LogsFolderName = "logs";
 
     /// <summary>
+    /// Optional user-editable process-grouping overrides
+    /// (docs/monitoring-dataflow.md section 5 — "the grouping table is data").
+    /// </summary>
+    public const string ProcessGroupsFileName = "process-groups.json";
+
+    /// <summary>
     /// Root data directory, created if it does not exist.
     /// </summary>
     public static string DataDirectory =>
@@ -34,6 +40,9 @@ public static class AppPaths
 
     /// <summary>Full path of the settings file.</summary>
     public static string SettingsFile => Path.Combine(DataDirectory, SettingsFileName);
+
+    /// <summary>Full path of the optional process-grouping overrides file (may not exist).</summary>
+    public static string ProcessGroupsFile => Path.Combine(DataDirectory, ProcessGroupsFileName);
 
     /// <summary>Directory holding log files, created if it does not exist.</summary>
     public static string LogsDirectory =>

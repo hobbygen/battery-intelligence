@@ -166,6 +166,62 @@ public sealed class DatabaseMaintenanceServiceTests
     }
 
     [Fact]
+    public async Task RunRollupAsync_RollsFullyElapsedDays_IntoApplicationUsage_AndIsIdempotent()
+    {
+        using TempDatabase db = new();
+        await db.MigrateAsync();
+
+        long yesterday = FloorToDay(DateTimeOffset.UtcNow.AddDays(-1));
+        // Three ticks of "chrome" that day, one in the foreground.
+        await InsertProcessSampleAsync(db, yesterday + 10_000, "chrome", "Google Chrome", cpu: 20, powerMw: 1_000, foreground: true);
+        await InsertProcessSampleAsync(db, yesterday + 20_000, "chrome", "Google Chrome", cpu: 30, powerMw: 1_400, foreground: false);
+        await InsertProcessSampleAsync(db, yesterday + 30_000, "chrome", "Google Chrome", cpu: 10, powerMw: 600, foreground: false);
+        // A sample from today must NOT be rolled — the day is still accumulating.
+        await InsertProcessSampleAsync(db, FloorToDay(DateTimeOffset.UtcNow) + 5_000, "chrome", "Google Chrome", cpu: 5, powerMw: 100, foreground: false);
+
+        AppSettings settings = new();
+        settings.Monitoring.ProcessSampleSeconds = 10;
+        DatabaseMaintenanceService service = CreateService(db, settings);
+
+        await service.RunRollupAsync(CancellationToken.None);
+        await service.RunRollupAsync(CancellationToken.None);
+
+        long rows = await db.ScalarAsync<long>("SELECT COUNT(*) FROM ApplicationUsage;");
+        long totalSeconds = await db.ScalarAsync<long>("SELECT TotalSeconds FROM ApplicationUsage WHERE ApplicationKey = 'chrome';");
+        long foregroundSeconds = await db.ScalarAsync<long>("SELECT ForegroundSeconds FROM ApplicationUsage WHERE ApplicationKey = 'chrome';");
+        long energyMwh = await db.ScalarAsync<long>("SELECT EstimatedEnergyMwh FROM ApplicationUsage WHERE ApplicationKey = 'chrome';");
+
+        Assert.Equal(1, rows);
+        Assert.Equal(30, totalSeconds);          // 3 ticks × 10 s
+        Assert.Equal(10, foregroundSeconds);     // 1 tick × 10 s
+        Assert.Equal(8, energyMwh);              // (1000+1400+600) mW × 10 s / 3600 ≈ 8.3 mWh
+    }
+
+    [Fact]
+    public async Task RunRetentionAsync_DeletesProcessSamples_OnlyAfterTheirDayIsRolledUp()
+    {
+        using TempDatabase db = new();
+        await db.MigrateAsync();
+
+        long oldDay = FloorToDay(DateTimeOffset.UtcNow.AddDays(-10));
+        await InsertProcessSampleAsync(db, oldDay + 10_000, "chrome", "Google Chrome", cpu: 20, powerMw: 1_000, foreground: false);
+
+        AppSettings settings = new();
+        settings.Data.RawRetentionDays = 7;
+        settings.Monitoring.ProcessSampleSeconds = 10;
+        DatabaseMaintenanceService service = CreateService(db, settings);
+
+        // Not rolled up yet: retention must not touch it.
+        await service.RunRetentionAsync(CancellationToken.None);
+        Assert.Equal(1, await db.ScalarAsync<long>("SELECT COUNT(*) FROM ProcessSample;"));
+
+        await service.RunRollupAsync(CancellationToken.None);
+        await service.RunRetentionAsync(CancellationToken.None);
+        Assert.Equal(0, await db.ScalarAsync<long>("SELECT COUNT(*) FROM ProcessSample;"));
+        Assert.Equal(1, await db.ScalarAsync<long>("SELECT COUNT(*) FROM ApplicationUsage;"));
+    }
+
+    [Fact]
     public async Task RunRetentionAsync_RecordsLastCleanupUtc()
     {
         using TempDatabase db = new();
@@ -183,6 +239,28 @@ public sealed class DatabaseMaintenanceServiceTests
 
     private static long FloorToMinute(DateTimeOffset timestamp) =>
         (timestamp.ToUnixTimeMilliseconds() / OneMinuteMs) * OneMinuteMs;
+
+    private static long FloorToDay(DateTimeOffset timestamp) =>
+        (timestamp.ToUnixTimeMilliseconds() / 86_400_000) * 86_400_000;
+
+    private static async Task InsertProcessSampleAsync(
+        TempDatabase db, long timestampUtcMs, string appKey, string displayName, double cpu, int powerMw, bool foreground)
+    {
+        await db.ExecuteAsync(
+            """
+            INSERT INTO ProcessSample
+                (TimestampUtc, ProcessId, ProcessName, ApplicationKey, CpuPercent, IsForeground,
+                 EstimatedPowerMw, EstimatedSharePercent, EstimatorVersion, DataQuality, MeasurementSource)
+            VALUES
+                ($ts, 0, $name, $key, $cpu, $fg, $power, 10.0, 'AppEnergyV1', 3, 21);
+            """,
+            ("$ts", timestampUtcMs),
+            ("$name", displayName),
+            ("$key", appKey),
+            ("$cpu", cpu),
+            ("$fg", foreground ? 1 : 0),
+            ("$power", powerMw));
+    }
 
     private static async Task<long> InsertDeviceAsync(TempDatabase db)
     {

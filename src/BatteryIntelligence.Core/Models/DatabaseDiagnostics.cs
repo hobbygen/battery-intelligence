@@ -12,6 +12,7 @@ namespace BatteryIntelligence.Core.Models;
 /// <param name="PendingWrites">Rows currently queued but not yet flushed (across every write queue).</param>
 /// <param name="PowerSampleRowCount">Row count in <c>PowerSample</c>.</param>
 /// <param name="TemperatureSampleRowCount">Row count in <c>TemperatureSample</c>.</param>
+/// <param name="ProcessSampleRowCount">Row count in <c>ProcessSample</c>.</param>
 public sealed record DatabaseDiagnostics(
     bool Exists,
     string Path,
@@ -21,4 +22,5 @@ public sealed record DatabaseDiagnostics(
     DateTimeOffset? LastCleanupUtc,
     int PendingWrites,
     long PowerSampleRowCount = 0,
-    long TemperatureSampleRowCount = 0);
+    long TemperatureSampleRowCount = 0,
+    long ProcessSampleRowCount = 0);

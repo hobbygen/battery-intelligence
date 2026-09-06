@@ -41,6 +41,7 @@
         AdditionalProperties="Configuration=Debug" />
     <ProjectReference Include="..\..\src\BatteryIntelligence.Power\BatteryIntelligence.Power.csproj" />
     <ProjectReference Include="..\..\src\BatteryIntelligence.Thermal\BatteryIntelligence.Thermal.csproj" />
+    <ProjectReference Include="..\..\src\BatteryIntelligence.ProcessMonitoring\BatteryIntelligence.ProcessMonitoring.csproj" />
   </ItemGroup>
 
 </Project>

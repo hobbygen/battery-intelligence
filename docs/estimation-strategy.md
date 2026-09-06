@@ -238,6 +238,26 @@ Consequences, all mandatory:
 - The methodology is reproduced in Diagnostics/About (spec §55).
 - No per-app figure is ever presented as mWh "used" without the estimate framing.
 
+### As built (Phase 7)
+
+`Core.Processes.AppEnergyEstimator`, `Version = "AppEnergyV1"`. Confirmed against
+this design, with two deviations:
+
+- **Step 3 weights `W_gpu` and `W_io` are configured but not populated.** GPU and
+  disk-I/O per-process telemetry needs ETW or elevation (`api-strategy.md` §3),
+  so `gpu_share_i` and `io_rate_i` are zero on this build. `w_i` reduces to
+  `cpu_share_i·W_cpu + foreground_i·W_fg`. The full formula stays in code.
+- **Step 2's baseline is a simplified EWMA split**, not a least-squares
+  regression: `BaselineEstimator` keeps an exponentially-weighted mean of the
+  measured draw during idle periods, separately for screen-on and screen-off,
+  and returns the value for the current screen state. Until
+  `MinObservationsPerState` (20) idle samples exist for that state, it returns
+  `ProcessMonitoringSettings.DefaultBaselineMw` and forces the whole attribution
+  to **Low** confidence. The display-vs-platform split is descriptive only — the
+  attribution needs just the total for the current state.
+
+Weights live in `ProcessMonitoringSettings` (spec §66), not as code constants.
+
 ---
 
 ## 6. Charging quality (spec §10, §54)

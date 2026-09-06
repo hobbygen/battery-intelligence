@@ -44,6 +44,23 @@ public sealed class SettingsValidationTests
     }
 
     [Fact]
+    public void ProcessMonitoringWeights_AreClamped_AndAtLeastOneActivityTermSurvives()
+    {
+        AppSettings settings = new();
+        settings.Processes.WeightCpu = -3.0;
+        settings.Processes.WeightGpu = 0.0;
+        settings.Processes.WeightIo = 0.0;
+        settings.Processes.TopApplicationCount = 1;
+        settings.Processes.DefaultBaselineMw = -100;
+
+        settings.Validate();
+
+        Assert.True(settings.Processes.WeightCpu + settings.Processes.WeightGpu + settings.Processes.WeightIo > 0.0);
+        Assert.InRange(settings.Processes.TopApplicationCount, 5, 200);
+        Assert.Equal(0, settings.Processes.DefaultBaselineMw);
+    }
+
+    [Fact]
     public void CriticalThreshold_IsForcedBelowLowThreshold()
     {
         // Otherwise the two alerts fight, and the user gets a critical warning

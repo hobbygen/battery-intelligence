@@ -165,6 +165,16 @@ path, then by known multi-process patterns (browser renderer/GPU children), then
 process name. The grouping table is data, not code, so new applications can be
 recognised without a rebuild.
 
+**As built (Phase 7).** The sampler runs on its own timer at `ProcessSampleSeconds`
+(10 s default). CPU percent is "% of one logical processor" from cumulative-time
+deltas — the core count only caps a single runaway process, and the sum across
+processes can exceed 100. Protected processes that deny `TotalProcessorTime`
+without elevation are skipped, not guessed at. GPU and I/O per-process rates are
+not observed (ETW/admin) — the weight is CPU + foreground. The first tick after a
+start records the CPU baseline and publishes nothing. Persisted rows are
+per-application (`top-N + Other + baseline`), not per-process. The grouping table
+ships as a built-in default plus an optional `process-groups.json` override.
+
 ---
 
 ## 6. Write batching

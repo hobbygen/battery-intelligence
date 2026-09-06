@@ -1,17 +1,17 @@
 BATTERY INTELLIGENCE — PROGRESS TIMELINE
-Last updated: 2026-09-05
+Last updated: 2026-09-06
 Purpose: read this file first when resuming work, instead of re-reading the
 whole codebase. Full detail always lives in docs/roadmap.md (phase-by-phase,
 with exit criteria and deviations) and docs/traceability.md (requirement ->
 implementation -> test). This file is the fast orientation layer on top of those.
 
 ============================================================
-CURRENT STATUS: Phase 6 of 15 complete. UI reskinned from Claude Design.
-Ready to start Phase 7 (Application usage).
+CURRENT STATUS: Phase 7 of 15 complete. Application usage (AppEnergyV1) shipped.
+Ready to start Phase 8 (Analytics).
 ============================================================
 
 Solution builds clean (0 warnings, 0 errors) in Debug and Release.
-Test totals: 181 passing — 137 Tests.Unit, 19 Tests.Simulation, 25 Tests.Integration.
+Test totals: 212 passing — 158 Tests.Unit, 24 Tests.Simulation, 30 Tests.Integration.
 Verified live on the reference machine (Dell laptop, Windows 11 build 26200,
 battery DELL 68ND307 / SMP / LiP, 40.0% retention — this is a real worn battery,
 not an error, and is documented as the reference reading in capability-matrix.md).
@@ -21,7 +21,8 @@ To rebuild and re-verify from scratch:
   dotnet build BatteryIntelligence.slnx -c Release
   dotnet test BatteryIntelligence.slnx -c Debug
   dotnet run --project src/BatteryIntelligence.App/BatteryIntelligence.App.csproj -c Debug
-    (launches the real WinUI app; Battery, Power, Sessions and Diagnostics pages show live data)
+    (launches the real WinUI app; Battery, Power, Sessions, Temperature, App Usage
+     and Diagnostics pages show live data)
 
 ------------------------------------------------------------
 PHASE 0 — Architecture (complete, done before this session history began)
@@ -368,21 +369,96 @@ Key deviations (see docs/roadmap.md Phase 6):
 - Per-band breakdown ships; a per-screen-state split waits for Phase 7.
 - Critical threshold derived as warning + 7 C, not a second setting.
 
-============================================================
-WHAT'S NEXT: PHASE 7 — Application usage
-============================================================
-Per docs/roadmap.md: process sampler with delta CPU and bounded working set,
-metadata cache, data-driven grouping table, AppEnergyV1 estimator with baseline
-separation, ranking/sorting, daily ApplicationUsage rollup, App Usage page with
-permanent Estimated badges and a methodology link.
-Depends on: Phases 2, 3, 4, 5 — all done.
-Exit: shares sum to the attributable budget with the baseline shown separately;
-sampler cost within the CPU budget; the on-AC case states that absolute figures
-are unavailable.
+------------------------------------------------------------
+PHASE 7 — Application usage (complete)
+------------------------------------------------------------
+Per-application battery attribution. Windows only exposes MEASURED per-process
+energy via SRUM (needs admin; spec S23 forbids requiring elevation), so per-app
+energy is a PERMANENT model — AppEnergyV1. Built like Phases 5/6: pure logic in
+Core, a promoted infra-sibling orchestrator (Core-only ref), a Data write queue,
+a 1 Hz-coalesced view model. ProcessSample + ApplicationUsage tables already
+existed verbatim from V001, so NO migration was needed.
 
-The App Usage page and the Dashboard "Application Usage" card are already built as
-honest "arrives in Phase 7" empty states in the new design language — Phase 7
-replaces their content, it does not restyle them.
+What shipped:
+- Core.Processes (pure): ProcessCpuCalculator (delta CPU, "% of one core",
+  core-capped, pid-reuse guard), ProcessGrouping + ProcessGroupingTable (path ->
+  name -> fallback; Default built-in; browser renderer/GPU children fold in),
+  BaselineEstimator (EWMA of idle draw split by screen state; conservative
+  default + forced Low confidence until 20 idle samples/state), AppEnergyEstimator
+  = "AppEnergyV1": E_total -> E_apps = E_total - E_baseline -> weighted share_i;
+  shares sum to 100% of the attributable budget; baseline is a distinct entry;
+  tail beyond top-N collapses into one "Other" row.
+- New Core models/enums: ProcessRawSample, AppUsageEntry, AppEnergyAttribution,
+  ProcessSampleBatch/Record, AppEnergyWeights/AppActivity, AppEnergyConfidence,
+  ProcessWindow; interfaces IProcessEnumerator, IProcessMonitoringService,
+  IProcessSampleWriteQueue; ProcessMonitoringSettings config category (weights,
+  top-N, idle floor, default baseline — configuration, not code constants).
+- ProcessMonitoring project: PROMOTED from the ModuleMarker stub to
+  net10.0-windows, Core-only ref. SystemProcessEnumerator (Process.GetProcesses,
+  cumulative CPU time, working set; foreground pid via one LibraryImport; exe
+  path + start time cached by (pid,startTime); protected processes skipped).
+  ProcessMonitoringService (hosted, own 10s timer): delta CPU -> group ->
+  skip-when-idle (screen off + low CPU) -> resolve E_total from
+  IBatteryMonitoringService (discharge + Measured/Calculated power only) ->
+  BaselineEstimator -> AppEnergyEstimator; 1h tick buffer; GetRanking(window)
+  averages CPU over the window at the latest tick's draw; persists per-application
+  rows. Cold-start tick publishes nothing. ProcessGroupingTableLoader merges an
+  optional %LocalAppData%\BatteryIntelligence\process-groups.json.
+- Data: ProcessSampleRow/Repository, ProcessSampleWriteQueue (200/30s/flush/1000
+  cap; no BatteryDevice FK on this table). DatabaseMaintenanceService gained the
+  idempotent daily ApplicationUsage rollup (only days before today; __baseline__
+  excluded) + ProcessSample retention (rolled-up + open-session guards; baseline
+  rows on plain age cutoff). ProcessSampleRowCount on the Diagnostics DB facts.
+- App: AppUsageViewModel (window + sort selectors, ranked rows with share bars,
+  a distinct baseline slice, confidence line, on-AC state, permanent Estimated
+  badge). Views/AppUsagePage.xaml rebuilt in the card language (placeholder gone)
+  with a "How this is estimated" link to About. Dashboard "Application Usage"
+  card wired to the top app. About page: full AppEnergyV1 methodology (spec S55).
+
+Verified live on the reference machine (2026-09-06): with a busy loop generating
+load, ProcessSample rows persisted every ~10s — bash at 99.3% CPU / 15,441 mW
+estimated / 63% share, code 22% / 3,415 mW, the app itself 2.8%, baseline
+separated at ~4,000 mW; grouping resolved "Microsoft Teams" / "Windows Services";
+DataQuality=Estimated, MeasurementSource=Model, EstimatorVersion="AppEnergyV1" on
+every row; SessionId populated. On a genuinely idle machine every share is 0 (no
+fabrication). Solution builds clean Debug + Release; 212 tests pass (158 + 24 + 30).
+Note: a WinUI LayoutCycleException fired once on a cold first launch and did not
+reproduce on the two runs after — treated as a first-run JIT/WASDK-bootstrap
+transient, worth a second look if it recurs.
+
+Key deviations (see docs/roadmap.md Phase 7 for the full list):
+- GPU + I/O per-process weight are configured but not observed (need ETW/admin) —
+  attribution is CPU + foreground weighted; the full AppEnergyV1 formula stays.
+- Application icons not extracted — monogram tiles; the metadata-cache seam is
+  in place to add them later.
+- Baseline is a simplified EWMA split, not a least-squares regression.
+- ProcessSample rows are per-application (ProcessId 0), not per-process — nothing
+  consumes per-process granularity and it keeps writes bounded.
+- CPU% is "% of one logical processor" (sum can exceed 100); cores only cap a
+  single process.
+- Grouping table = embedded C# default + optional JSON override, not a DB table.
+- Window selector: "Last hour" / "This session" only (24h/7d/30d need Phase 11).
+- No V002 migration — both tables exist from V001; backup-before-migration stays
+  untested until a real schema change ships.
+- Attribution is system-wide, not per-battery (one process context).
+
+============================================================
+WHAT'S NEXT: PHASE 8 — Analytics
+============================================================
+Per docs/roadmap.md: HealthScoreV1 with weight renormalisation and FactorsJson,
+degradation trend with smoothing, charging quality score, discharge analysis,
+rolling runtime estimator with confidence, statistics engine
+(lifetime/today/7d/30d/custom), RuleBasedInsightProvider behind IInsightProvider,
+Statistics page.
+Depends on: Phases 3, 4, 5, 6, 7 — all done.
+Exit: score renormalises correctly with cycle count and temperature both absent;
+insights suppressed below confidence and effect-size thresholds; "How this score
+is calculated" renders real per-factor contributions.
+
+The Statistics page and the Dashboard "Smart Insights" card are already built as
+honest "arrives in Phase 8" empty states — Phase 8 replaces their content.
+DailyStatistics (table exists since V001, still no producer) and SampleHour get
+their first producer in this phase / Phase 11.
 
 ============================================================
 PROJECT STRUCTURE QUICK MAP (for when you do need to open files)
@@ -403,12 +479,16 @@ src/BatteryIntelligence.Power         — PowerMonitoringService (orchestrator);
 src/BatteryIntelligence.Thermal       — ThermalMonitoringService (orchestrator);
     TemperatureThresholds/BandClassifier/ThresholdEventDetector live in Core.Thermal.
     Core-only reference (infra sibling). net10.0-windows.
+src/BatteryIntelligence.ProcessMonitoring — ProcessMonitoringService (orchestrator)
+    + SystemProcessEnumerator + ProcessGroupingTableLoader. ProcessCpuCalculator,
+    ProcessGrouping, BaselineEstimator, AppEnergyEstimator live in Core.Processes.
+    Core-only reference (infra sibling). net10.0-windows.
 src/BatteryIntelligence.App           — WinUI 3 shell, Views, ViewModels, composition root (App.xaml.cs).
     Resources/AppTheme.xaml holds the Claude Design tokens; Controls/{Segmented,
     CardHeader,MetricStat,Sparkline} are the new design primitives; Controls/PowerChart
     is the only file touching LiveChartsCore.
-src/BatteryIntelligence.{ProcessMonitoring,Analytics,Notifications,Reporting}
-    — stub projects, not yet implemented (their phases are 7,8,9,11 respectively)
+src/BatteryIntelligence.{Analytics,Notifications,Reporting}
+    — stub projects, not yet implemented (their phases are 8,9,11 respectively)
 tests/BatteryIntelligence.Tests.Unit         — pure logic, net10.0, fast.
     Includes Sessions/SessionStateMachineTests.cs — the full scenario matrix.
 tests/BatteryIntelligence.Tests.Simulation   — scripted hardware scenarios, net10.0-windows,

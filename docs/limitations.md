@@ -101,6 +101,11 @@ What that means in practice:
 - Individual application **wattages** are estimates, not measurements.
 - Two applications with identical CPU time can differ in real energy use, and the
   model cannot see the difference.
+- **GPU and disk-I/O activity are not observed per process.** That needs ETW or
+  elevation, neither of which this application uses. The `AppEnergyV1` model
+  keeps `W_gpu` and `W_io` terms so they can be populated later, but today the
+  weight is CPU time plus a small foreground bonus.
+- **Per-application icons are not shown yet.** Rows use a monogram tile.
 
 Every such figure carries an "Estimated" badge. The full methodology is in
 About → Estimation Methodology.

@@ -13,6 +13,7 @@ public sealed class DatabaseDiagnosticsProvider : IDatabaseDiagnosticsProvider
     private readonly IBatterySampleWriteQueue _writeQueue;
     private readonly IPowerSampleWriteQueue _powerWriteQueue;
     private readonly ITemperatureSampleWriteQueue _temperatureWriteQueue;
+    private readonly IProcessSampleWriteQueue _processWriteQueue;
     private readonly ILogger<DatabaseDiagnosticsProvider> _logger;
 
     public DatabaseDiagnosticsProvider(
@@ -20,18 +21,21 @@ public sealed class DatabaseDiagnosticsProvider : IDatabaseDiagnosticsProvider
         IBatterySampleWriteQueue writeQueue,
         IPowerSampleWriteQueue powerWriteQueue,
         ITemperatureSampleWriteQueue temperatureWriteQueue,
+        IProcessSampleWriteQueue processWriteQueue,
         ILogger<DatabaseDiagnosticsProvider> logger)
     {
         ArgumentNullException.ThrowIfNull(connectionFactory);
         ArgumentNullException.ThrowIfNull(writeQueue);
         ArgumentNullException.ThrowIfNull(powerWriteQueue);
         ArgumentNullException.ThrowIfNull(temperatureWriteQueue);
+        ArgumentNullException.ThrowIfNull(processWriteQueue);
         ArgumentNullException.ThrowIfNull(logger);
 
         _connectionFactory = connectionFactory;
         _writeQueue = writeQueue;
         _powerWriteQueue = powerWriteQueue;
         _temperatureWriteQueue = temperatureWriteQueue;
+        _processWriteQueue = processWriteQueue;
         _logger = logger;
     }
 
@@ -39,10 +43,13 @@ public sealed class DatabaseDiagnosticsProvider : IDatabaseDiagnosticsProvider
     {
         string path = _connectionFactory.DatabasePath;
 
-        int pendingWrites = _writeQueue.PendingCount + _powerWriteQueue.PendingCount + _temperatureWriteQueue.PendingCount;
+        int pendingWrites = _writeQueue.PendingCount + _powerWriteQueue.PendingCount
+            + _temperatureWriteQueue.PendingCount + _processWriteQueue.PendingCount;
         DateTimeOffset? lastWrite = Later(
-            Later(_writeQueue.LastFlushUtc, _powerWriteQueue.LastFlushUtc),
-            _temperatureWriteQueue.LastFlushUtc);
+            Later(
+                Later(_writeQueue.LastFlushUtc, _powerWriteQueue.LastFlushUtc),
+                _temperatureWriteQueue.LastFlushUtc),
+            _processWriteQueue.LastFlushUtc);
 
         if (!File.Exists(path))
         {
@@ -58,6 +65,7 @@ public sealed class DatabaseDiagnosticsProvider : IDatabaseDiagnosticsProvider
         long sampleCount = 0;
         long powerSampleCount = 0;
         long temperatureSampleCount = 0;
+        long processSampleCount = 0;
         DateTimeOffset? lastCleanup = null;
 
         try
@@ -80,6 +88,12 @@ public sealed class DatabaseDiagnosticsProvider : IDatabaseDiagnosticsProvider
             {
                 temperatureCountCommand.CommandText = "SELECT COUNT(*) FROM TemperatureSample;";
                 temperatureSampleCount = (long)(await temperatureCountCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) ?? 0L);
+            }
+
+            await using (SqliteCommand processCountCommand = connection.CreateCommand())
+            {
+                processCountCommand.CommandText = "SELECT COUNT(*) FROM ProcessSample;";
+                processSampleCount = (long)(await processCountCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) ?? 0L);
             }
 
             await using (SqliteCommand cleanupCommand = connection.CreateCommand())
@@ -108,7 +122,8 @@ public sealed class DatabaseDiagnosticsProvider : IDatabaseDiagnosticsProvider
             LastCleanupUtc: lastCleanup,
             PendingWrites: pendingWrites,
             PowerSampleRowCount: powerSampleCount,
-            TemperatureSampleRowCount: temperatureSampleCount);
+            TemperatureSampleRowCount: temperatureSampleCount,
+            ProcessSampleRowCount: processSampleCount);
     }
 
     private static DateTimeOffset? Later(DateTimeOffset? a, DateTimeOffset? b)

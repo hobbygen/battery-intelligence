@@ -1,6 +1,6 @@
 # Requirements Traceability Matrix
 
-Status: updated after Phase 6. Version 1.0.0.
+Status: updated after Phase 7. Version 1.0.0.
 
 Covers spec §70: requirement → module → implementation → test → status.
 
@@ -76,12 +76,12 @@ Covers spec §70: requirement → module → implementation → test → status.
 
 | ID | Requirement | Spec | Module | Implementation | Test | Status |
 |---|---|---|---|---|---|---|
-| R-050 | Process monitoring | §15 | ProcessMonitoring | Delta CPU, bounded top-N | Unit + perf | 📋 |
-| R-051 | Intelligent process grouping | §15 | ProcessMonitoring | Data-driven grouping table | Unit: browser multi-process | 📋 |
-| R-052 | Never claim exact per-process energy | §15, §55 | ProcessMonitoring | Permanent Estimated grade | Unit: grade is always Estimated | 📋 |
-| R-053 | Documented, versioned, testable model | §55 | ProcessMonitoring | `AppEnergyV1` + `EstimatorVersion` | Unit: shares sum; no double count | 📋 |
-| R-054 | Separate system from attributed power | §55 | ProcessMonitoring | Baseline separated first | Unit | 📋 |
-| R-055 | Methodology visible to user | §55 | App | About → Estimation Methodology | Manual | 📋 |
+| R-050 | Process monitoring | §15 | ProcessMonitoring | `ProcessCpuCalculator` delta CPU; `SystemProcessEnumerator` cached metadata; `ProcessMonitoringService` bounded top-N + "Other", skip-when-idle | `ProcessCpuCalculatorTests`, `ProcessMonitoringServiceTests` (top-N collapse, delta across ticks) | ✅ |
+| R-051 | Intelligent process grouping | §15 | ProcessMonitoring, Core | `ProcessGrouping` + `ProcessGroupingTable.Default`; optional `process-groups.json` override | `ProcessGroupingTests` (browser renderer/GPU children → one key; path beats name; unknown → own name) | ✅ |
+| R-052 | Never claim exact per-process energy | §15, §55 | ProcessMonitoring, Data | Permanent `DataQuality.Estimated` + `MeasurementSource.Model` on every row | `ProcessSampleWriteQueueTests` (grade + source), `AppEnergyEstimatorTests` | ✅ |
+| R-053 | Documented, versioned, testable model | §55 | Core.Processes | `AppEnergyEstimator` = `AppEnergyV1`, `Version` const, `EstimatorVersion` on `ProcessSample`/`ApplicationUsage` | `AppEnergyEstimatorTests` (shares sum to 100 %; top-N "Other" keeps share; no double count) | ✅ |
+| R-054 | Separate system from attributed power | §55 | Core.Processes | `BaselineEstimator` separates `E_baseline` first; baseline is a distinct `AppUsageEntry` | `BaselineEstimatorTests`, `AppEnergyEstimatorTests.OnBattery_BaselineIsSeparatedFirst_…` | ✅ |
+| R-055 | Methodology visible to user | §55 | App | About → "Estimation Methodology" card (three steps, claims/non-claims, on-AC caveat); App Usage "How this is estimated" link | Live on reference machine | ✅ |
 
 ## Data
 

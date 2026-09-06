@@ -16,6 +16,7 @@ public sealed partial class DashboardPage : Page
         Power = App.Services.GetRequiredService<PowerViewModel>();
         Sessions = App.Services.GetRequiredService<SessionsViewModel>();
         Temperature = App.Services.GetRequiredService<TemperatureViewModel>();
+        AppUsage = App.Services.GetRequiredService<AppUsageViewModel>();
         _navigation = App.Services.GetRequiredService<INavigationService>();
         InitializeComponent();
 
@@ -27,6 +28,7 @@ public sealed partial class DashboardPage : Page
             Power.Dispose();
             Sessions.Dispose();
             Temperature.Dispose();
+            AppUsage.Dispose();
         };
     }
 
@@ -42,6 +44,9 @@ public sealed partial class DashboardPage : Page
     /// <summary>Battery temperature (unavailable on the reference machine).</summary>
     public TemperatureViewModel Temperature { get; }
 
+    /// <summary>Top application by estimated battery impact, for the usage card.</summary>
+    public AppUsageViewModel AppUsage { get; }
+
     private void OnViewBatteryDetailsClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
         _ = sender;
@@ -54,5 +59,12 @@ public sealed partial class DashboardPage : Page
         _ = sender;
         _ = e;
         _navigation.NavigateTo("Battery");
+    }
+
+    private void OnAppUsageCardAction(object sender, System.EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        _navigation.NavigateTo("AppUsage");
     }
 }
