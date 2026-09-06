@@ -82,6 +82,28 @@
                         <TextBlock FontWeight="SemiBold" Text="What this does and does not claim" />
                         <TextBlock Foreground="{ThemeResource AppText2Brush}" TextWrapping="Wrap"
                             Text="It ranks applications by likely battery impact and apportions a measured total among them. It does not measure any single application's consumption — two applications with identical CPU time can differ substantially in real energy use, and none of the deciding factors (instruction mix, wake frequency, GPU work) is fully observable here. Shares always sum to 100% of the attributable budget, with the baseline shown separately so nothing is double-counted." />
+
+                        <Border Height="1" Background="{ThemeResource AppLine2Brush}" Margin="0,6,0,6" />
+
+                        <TextBlock Style="{StaticResource SecondaryMetricTextStyle}" FontSize="16" Text="Battery Health Score — HealthScoreV1" />
+                        <TextBlock Foreground="{ThemeResource AppText2Brush}" TextWrapping="Wrap"
+                            Text="A weighted 0–100 score over the factors this hardware can actually report: capacity retention (weight 0.50, required — no score without it), degradation rate (0.20), cycle count vs a chemistry-typical rating (0.10), thermal exposure (0.10), charge behaviour / depth of discharge (0.05) and charge-rate stability (0.05). Weights renormalise across the available factors — on hardware that does not report cycle count or battery temperature, those weights are redistributed to the rest, and every score stores which factors it used." />
+
+                        <TextBlock FontWeight="SemiBold" Text="Degradation trend" />
+                        <TextBlock Foreground="{ThemeResource AppText2Brush}" TextWrapping="Wrap"
+                            Text="A Theil–Sen median slope of capacity retention over at least 30 days of health snapshots. The median-of-pairwise-slopes method means one anomalous full-charge reading cannot swing the line. Below the data floor no trend is shown." />
+
+                        <TextBlock FontWeight="SemiBold" Text="Charging quality — ChargingQualityV1" />
+                        <TextBlock Foreground="{ThemeResource AppText2Brush}" TextWrapping="Wrap"
+                            Text="Scored per completed charge against your own 30-day median rate (weight 0.40), rate stability (0.25), thermal behaviour (0.20, dropped when there is no sensor) and interruptions (0.15). Needs at least five comparable prior sessions, or it reports 'not enough history yet'." />
+
+                        <TextBlock FontWeight="SemiBold" Text="Time remaining" />
+                        <TextBlock Foreground="{ThemeResource AppText2Brush}" TextWrapping="Wrap"
+                            Text="Remaining capacity divided by a recency-weighted discharge rate, computed separately for screen-on and screen-off periods. The screen-off figure is only shown once real screen-off history exists — the display is usually the largest single consumer, so extrapolating one from the other would be invention. Below about a minute of history the app shows 'Calculating…' rather than a figure it does not trust." />
+
+                        <TextBlock FontWeight="SemiBold" Text="Insights" />
+                        <TextBlock Foreground="{ThemeResource AppText2Brush}" TextWrapping="Wrap"
+                            Text="Rule-based (InsightRulesV1) and conservative. A rule emits only when all four gates pass: enough samples, a long enough period, an effect larger than the metric's own normal variation, and confidence at or above the threshold (0.7). The text is fixed and curated — only the figures are filled in." />
                     </StackPanel>
                 </Border>
             </StackPanel>

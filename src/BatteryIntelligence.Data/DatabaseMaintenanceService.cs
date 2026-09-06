@@ -116,6 +116,8 @@ public sealed class DatabaseMaintenanceService : IHostedService, IDisposable
             }
 
             await RollUpApplicationUsageAsync(connection, cancellationToken).ConfigureAwait(false);
+            await RollUpSampleHourAsync(connection, cancellationToken).ConfigureAwait(false);
+            await RollUpDailyStatisticsAsync(connection, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is SqliteException or IOException or UnauthorizedAccessException)
         {
@@ -173,6 +175,98 @@ public sealed class DatabaseMaintenanceService : IHostedService, IDisposable
         if (rolled > 0)
         {
             _logger.LogDebug("Rolled {Count} application/day row(s) into ApplicationUsage.", rolled);
+        }
+    }
+
+    /// <summary>
+    /// Idempotently rolls fully-elapsed hours of <c>SampleMinute</c> into
+    /// <c>SampleHour</c> (closes docs/traceability.md R-067). Only hours strictly
+    /// before the current hour are considered.
+    /// </summary>
+    private async Task RollUpSampleHourAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        const long hourMs = 3_600_000;
+        long hourCutoff = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / hourMs) * hourMs;
+
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO SampleHour
+                (BatteryId, HourUtc, AvgPercentage, MinPercentage, MaxPercentage,
+                 AvgPowerMw, MinPowerMw, MaxPowerMw, AvgVoltageMv, AvgTemperatureDk,
+                 ScreenOnSeconds, SampleCount)
+            SELECT
+                sm.BatteryId,
+                (sm.MinuteUtc / 3600000) * 3600000 AS HourUtc,
+                AVG(sm.AvgPercentage), MIN(sm.MinPercentage), MAX(sm.MaxPercentage),
+                CAST(ROUND(AVG(sm.AvgPowerMw)) AS INTEGER), MIN(sm.MinPowerMw), MAX(sm.MaxPowerMw),
+                CAST(ROUND(AVG(sm.AvgVoltageMv)) AS INTEGER),
+                CAST(ROUND(AVG(sm.AvgTemperatureDk)) AS INTEGER),
+                SUM(sm.ScreenOnSeconds),
+                SUM(sm.SampleCount)
+            FROM SampleMinute sm
+            WHERE (sm.MinuteUtc / 3600000) * 3600000 < $hourCutoff
+              AND NOT EXISTS (
+                  SELECT 1 FROM SampleHour sh
+                  WHERE sh.BatteryId = sm.BatteryId AND sh.HourUtc = (sm.MinuteUtc / 3600000) * 3600000
+              )
+            GROUP BY sm.BatteryId, HourUtc;
+            """;
+        command.Parameters.AddWithValue("$hourCutoff", hourCutoff);
+
+        int rolled = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        if (rolled > 0)
+        {
+            _logger.LogDebug("Rolled {Count} hour bucket(s) into SampleHour.", rolled);
+        }
+    }
+
+    /// <summary>
+    /// Idempotently rolls fully-elapsed days of closed <c>BatterySession</c> rows
+    /// into <c>DailyStatistics</c>, attributing each session to its start day.
+    /// Temperature and end-of-day health columns are left null for now — the
+    /// statistics engine computes from sessions directly; this tier is for Phase 11.
+    /// </summary>
+    private async Task RollUpDailyStatisticsAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        long todayStartMs = (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / DayMs) * DayMs;
+
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO DailyStatistics
+                (BatteryId, DayUtc, ChargeSessions, DischargeSessions, ChargingSeconds, DischargingSeconds,
+                 ScreenOnSeconds, ScreenOffSeconds, SleepSeconds, PercentCharged, PercentDischarged,
+                 AvgChargeRateMw, AvgDischargeRateMw)
+            SELECT
+                s.BatteryId,
+                (s.StartUtc / 86400000) * 86400000 AS DayUtc,
+                SUM(CASE WHEN s.SessionType = 1 THEN 1 ELSE 0 END),
+                SUM(CASE WHEN s.SessionType = 2 THEN 1 ELSE 0 END),
+                CAST(SUM(CASE WHEN s.SessionType = 1 THEN (s.EndUtc - s.StartUtc) / 1000 ELSE 0 END) AS INTEGER),
+                CAST(SUM(CASE WHEN s.SessionType = 2 THEN (s.EndUtc - s.StartUtc) / 1000 ELSE 0 END) AS INTEGER),
+                SUM(s.ScreenOnSeconds), SUM(s.ScreenOffSeconds), SUM(s.SleepSeconds),
+                SUM(CASE WHEN s.SessionType = 1 AND s.EndPercentage > s.StartPercentage
+                         THEN s.EndPercentage - s.StartPercentage ELSE 0 END),
+                SUM(CASE WHEN s.SessionType = 2 AND s.StartPercentage > s.EndPercentage
+                         THEN s.StartPercentage - s.EndPercentage ELSE 0 END),
+                CAST(ROUND(AVG(CASE WHEN s.SessionType = 1 AND s.EndCapacityMwh > s.StartCapacityMwh
+                         THEN (s.EndCapacityMwh - s.StartCapacityMwh) * 3600000.0 / (s.EndUtc - s.StartUtc) END)) AS INTEGER),
+                CAST(ROUND(AVG(CASE WHEN s.SessionType = 2 AND s.StartCapacityMwh > s.EndCapacityMwh
+                         THEN (s.StartCapacityMwh - s.EndCapacityMwh) * 3600000.0 / (s.EndUtc - s.StartUtc) END)) AS INTEGER)
+            FROM BatterySession s
+            WHERE s.EndUtc IS NOT NULL
+              AND (s.StartUtc / 86400000) * 86400000 < $todayStart
+              AND NOT EXISTS (
+                  SELECT 1 FROM DailyStatistics ds
+                  WHERE ds.BatteryId = s.BatteryId AND ds.DayUtc = (s.StartUtc / 86400000) * 86400000
+              )
+            GROUP BY s.BatteryId, DayUtc;
+            """;
+        command.Parameters.AddWithValue("$todayStart", todayStartMs);
+
+        int rolled = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        if (rolled > 0)
+        {
+            _logger.LogDebug("Rolled {Count} day(s) into DailyStatistics.", rolled);
         }
     }
 
@@ -262,6 +356,32 @@ public sealed class DatabaseMaintenanceService : IHostedService, IDisposable
                         """;
                     deleteProcess.Parameters.AddWithValue("$cutoff", rawCutoffMs);
                     processDeleted = await deleteProcess.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                }
+
+                await using (SqliteCommand deleteHour = connection.CreateCommand())
+                {
+                    // The minute and hour aggregate tiers age out on their own
+                    // configured windows (docs/database.md section 6, retention tiers).
+                    long minuteCutoff = DateTimeOffset.UtcNow.AddDays(-data.MinuteRetentionDays).ToUnixTimeMilliseconds();
+                    long hourCutoff = DateTimeOffset.UtcNow.AddDays(-data.HourRetentionDays).ToUnixTimeMilliseconds();
+                    deleteHour.Transaction = transaction;
+                    deleteHour.CommandText = """
+                        DELETE FROM SampleMinute WHERE MinuteUtc < $minuteCutoff;
+                        DELETE FROM SampleHour WHERE HourUtc < $hourCutoff;
+                        """;
+                    deleteHour.Parameters.AddWithValue("$minuteCutoff", minuteCutoff);
+                    deleteHour.Parameters.AddWithValue("$hourCutoff", hourCutoff);
+                    await deleteHour.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                }
+
+                if (data.DailyRetentionDays > 0)
+                {
+                    await using SqliteCommand deleteDaily = connection.CreateCommand();
+                    long dailyCutoff = DateTimeOffset.UtcNow.AddDays(-data.DailyRetentionDays).ToUnixTimeMilliseconds();
+                    deleteDaily.Transaction = transaction;
+                    deleteDaily.CommandText = "DELETE FROM DailyStatistics WHERE DayUtc < $cutoff;";
+                    deleteDaily.Parameters.AddWithValue("$cutoff", dailyCutoff);
+                    await deleteDaily.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 }
 
                 await using (SqliteCommand upsertSettings = connection.CreateCommand())

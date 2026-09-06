@@ -66,6 +66,8 @@ public sealed class DatabaseDiagnosticsProvider : IDatabaseDiagnosticsProvider
         long powerSampleCount = 0;
         long temperatureSampleCount = 0;
         long processSampleCount = 0;
+        long healthSnapshotCount = 0;
+        long insightCount = 0;
         DateTimeOffset? lastCleanup = null;
 
         try
@@ -96,6 +98,18 @@ public sealed class DatabaseDiagnosticsProvider : IDatabaseDiagnosticsProvider
                 processSampleCount = (long)(await processCountCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) ?? 0L);
             }
 
+            await using (SqliteCommand healthCountCommand = connection.CreateCommand())
+            {
+                healthCountCommand.CommandText = "SELECT COUNT(*) FROM BatteryHealthSnapshot;";
+                healthSnapshotCount = (long)(await healthCountCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) ?? 0L);
+            }
+
+            await using (SqliteCommand insightCountCommand = connection.CreateCommand())
+            {
+                insightCountCommand.CommandText = "SELECT COUNT(*) FROM Insight WHERE Dismissed = 0;";
+                insightCount = (long)(await insightCountCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) ?? 0L);
+            }
+
             await using (SqliteCommand cleanupCommand = connection.CreateCommand())
             {
                 cleanupCommand.CommandText = "SELECT LastCleanupUtc FROM DataRetentionSettings WHERE Id = 1;";
@@ -123,7 +137,9 @@ public sealed class DatabaseDiagnosticsProvider : IDatabaseDiagnosticsProvider
             PendingWrites: pendingWrites,
             PowerSampleRowCount: powerSampleCount,
             TemperatureSampleRowCount: temperatureSampleCount,
-            ProcessSampleRowCount: processSampleCount);
+            ProcessSampleRowCount: processSampleCount,
+            HealthSnapshotRowCount: healthSnapshotCount,
+            InsightRowCount: insightCount);
     }
 
     private static DateTimeOffset? Later(DateTimeOffset? a, DateTimeOffset? b)

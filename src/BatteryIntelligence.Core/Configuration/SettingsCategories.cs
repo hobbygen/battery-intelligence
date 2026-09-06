@@ -147,6 +147,38 @@ public sealed class ProcessMonitoringSettings
     }
 }
 
+/// <summary>
+/// The analytics engine (docs/estimation-strategy.md §§3–7; specification
+/// sections 16, 18, 19, 53). Thresholds are configuration, not code constants
+/// (spec §66).
+/// </summary>
+public sealed class AnalyticsSettings
+{
+    /// <summary>Minimum confidence (0–1) for a rule-based insight to be shown (spec §18).</summary>
+    public double InsightConfidenceThreshold { get; set; } = 0.7;
+
+    /// <summary>How often a health snapshot is computed and the insight set refreshed.</summary>
+    public int HealthSnapshotIntervalMinutes { get; set; } = 30;
+
+    /// <summary>The rolling window the remaining-runtime discharge rate is averaged over.</summary>
+    public int RuntimeWindowMinutes { get; set; } = 15;
+
+    /// <summary>Minimum span of health history before a degradation trend is offered (spec §53).</summary>
+    public int DegradationMinSpanDays { get; set; } = 30;
+
+    /// <summary>Minimum prior comparable charging sessions before a charging-quality score is offered (spec §10).</summary>
+    public int ChargingQualityMinSessions { get; set; } = 5;
+
+    public void Validate()
+    {
+        InsightConfidenceThreshold = Math.Clamp(InsightConfidenceThreshold, 0.5, 0.99);
+        HealthSnapshotIntervalMinutes = Math.Clamp(HealthSnapshotIntervalMinutes, 5, 1440);
+        RuntimeWindowMinutes = Math.Clamp(RuntimeWindowMinutes, 2, 120);
+        DegradationMinSpanDays = Math.Clamp(DegradationMinSpanDays, 7, 365);
+        ChargingQualityMinSessions = Math.Clamp(ChargingQualityMinSessions, 3, 50);
+    }
+}
+
 /// <summary>Alert thresholds. Specification sections 20 and 35, "Alerts".</summary>
 public sealed class AlertSettings
 {

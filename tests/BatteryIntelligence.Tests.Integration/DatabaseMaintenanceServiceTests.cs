@@ -222,6 +222,71 @@ public sealed class DatabaseMaintenanceServiceTests
     }
 
     [Fact]
+    public async Task RunRollupAsync_RollsSettledHours_IntoSampleHour_AndIsIdempotent()
+    {
+        using TempDatabase db = new();
+        await db.MigrateAsync();
+        long deviceId = await InsertDeviceAsync(db);
+
+        long hourUtc = (DateTimeOffset.UtcNow.AddHours(-3).ToUnixTimeMilliseconds() / 3_600_000) * 3_600_000;
+        // Two minute buckets in that hour.
+        await InsertMinuteRowAsync(db, deviceId, hourUtc + 60_000, 80.0, -6000);
+        await InsertMinuteRowAsync(db, deviceId, hourUtc + 120_000, 78.0, -6400);
+
+        DatabaseMaintenanceService service = CreateService(db);
+        await service.RunRollupAsync(CancellationToken.None);
+        await service.RunRollupAsync(CancellationToken.None);
+
+        long rows = await db.ScalarAsync<long>("SELECT COUNT(*) FROM SampleHour;");
+        long sampleCount = await db.ScalarAsync<long>("SELECT SampleCount FROM SampleHour WHERE HourUtc = $h;", ("$h", hourUtc));
+        Assert.Equal(1, rows);
+        Assert.Equal(2, sampleCount);
+    }
+
+    [Fact]
+    public async Task RunRollupAsync_RollsFullyElapsedDays_IntoDailyStatistics_FromSessions()
+    {
+        using TempDatabase db = new();
+        await db.MigrateAsync();
+        long deviceId = await InsertDeviceAsync(db);
+
+        long dayUtc = FloorToDay(DateTimeOffset.UtcNow.AddDays(-2));
+        // A 2-hour discharge (90 -> 60) and a 1-hour charge (60 -> 95) that day.
+        await InsertClosedSessionAsync(db, deviceId, type: 2, dayUtc + 3_600_000, dayUtc + 3_600_000 + 7_200_000, 90, 60, screenOn: 3600, screenOff: 3600);
+        await InsertClosedSessionAsync(db, deviceId, type: 1, dayUtc + 20_000_000, dayUtc + 20_000_000 + 3_600_000, 60, 95, screenOn: 1800, screenOff: 0);
+
+        DatabaseMaintenanceService service = CreateService(db);
+        await service.RunRollupAsync(CancellationToken.None);
+        await service.RunRollupAsync(CancellationToken.None);
+
+        long rows = await db.ScalarAsync<long>("SELECT COUNT(*) FROM DailyStatistics;");
+        long dischargeSec = await db.ScalarAsync<long>("SELECT DischargingSeconds FROM DailyStatistics WHERE DayUtc = $d;", ("$d", dayUtc));
+        double pctDischarged = await db.ScalarAsync<double>("SELECT PercentDischarged FROM DailyStatistics WHERE DayUtc = $d;", ("$d", dayUtc));
+        long chargeSessions = await db.ScalarAsync<long>("SELECT ChargeSessions FROM DailyStatistics WHERE DayUtc = $d;", ("$d", dayUtc));
+
+        Assert.Equal(1, rows);
+        Assert.Equal(7200, dischargeSec);
+        Assert.Equal(30.0, pctDischarged, 1);
+        Assert.Equal(1, chargeSessions);
+    }
+
+    [Fact]
+    public async Task RunRollupAsync_DoesNotRollToday_IntoDailyStatistics()
+    {
+        using TempDatabase db = new();
+        await db.MigrateAsync();
+        long deviceId = await InsertDeviceAsync(db);
+
+        long today = FloorToDay(DateTimeOffset.UtcNow);
+        await InsertClosedSessionAsync(db, deviceId, type: 2, today + 1_000_000, today + 4_000_000, 90, 70, screenOn: 1000, screenOff: 2000);
+
+        DatabaseMaintenanceService service = CreateService(db);
+        await service.RunRollupAsync(CancellationToken.None);
+
+        Assert.Equal(0, await db.ScalarAsync<long>("SELECT COUNT(*) FROM DailyStatistics;"));
+    }
+
+    [Fact]
     public async Task RunRetentionAsync_RecordsLastCleanupUtc()
     {
         using TempDatabase db = new();
@@ -242,6 +307,34 @@ public sealed class DatabaseMaintenanceServiceTests
 
     private static long FloorToDay(DateTimeOffset timestamp) =>
         (timestamp.ToUnixTimeMilliseconds() / 86_400_000) * 86_400_000;
+
+    private static async Task InsertMinuteRowAsync(TempDatabase db, long deviceId, long minuteUtcMs, double pct, int powerMw)
+    {
+        await db.ExecuteAsync(
+            """
+            INSERT INTO SampleMinute (BatteryId, MinuteUtc, AvgPercentage, MinPercentage, MaxPercentage,
+                                      AvgPowerMw, MinPowerMw, MaxPowerMw, AvgVoltageMv, SampleCount)
+            VALUES ($id, $m, $p, $p, $p, $pw, $pw, $pw, 11800, 1);
+            """,
+            ("$id", deviceId), ("$m", (minuteUtcMs / 60_000) * 60_000), ("$p", pct), ("$pw", powerMw));
+    }
+
+    private static async Task InsertClosedSessionAsync(
+        TempDatabase db, long deviceId, int type, long startMs, long endMs, double startPct, double endPct, long screenOn, long screenOff)
+    {
+        await db.ExecuteAsync(
+            """
+            INSERT INTO BatterySession
+                (BatteryId, SessionType, StartUtc, EndUtc, StartPercentage, EndPercentage,
+                 StartCapacityMwh, EndCapacityMwh, ScreenOnSeconds, ScreenOffSeconds, SleepSeconds, ClosedCleanly)
+            VALUES ($id, $type, $start, $end, $sp, $ep,
+                    $scap, $ecap, $son, $soff, 0, 1);
+            """,
+            ("$id", deviceId), ("$type", type), ("$start", startMs), ("$end", endMs),
+            ("$sp", startPct), ("$ep", endPct),
+            ("$scap", (int)(startPct * 380)), ("$ecap", (int)(endPct * 380)),
+            ("$son", screenOn), ("$soff", screenOff));
+    }
 
     private static async Task InsertProcessSampleAsync(
         TempDatabase db, long timestampUtcMs, string appKey, string displayName, double cpu, int powerMw, bool foreground)

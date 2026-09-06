@@ -1,8 +1,10 @@
 using BatteryIntelligence.App.Services;
 using BatteryIntelligence.App.ViewModels;
 using BatteryIntelligence.App.Windows;
+using BatteryIntelligence.Analytics;
 using BatteryIntelligence.Battery;
 using BatteryIntelligence.Battery.Sources;
+using BatteryIntelligence.Core.Analytics;
 using BatteryIntelligence.Core.Configuration;
 using BatteryIntelligence.Core.Constants;
 using BatteryIntelligence.Core.Enums;
@@ -229,6 +231,9 @@ public partial class App : Application
         services.AddSingleton<ProcessSampleWriteQueue>();
         services.AddSingleton<IProcessSampleWriteQueue>(sp => sp.GetRequiredService<ProcessSampleWriteQueue>());
         services.AddHostedService(sp => sp.GetRequiredService<ProcessSampleWriteQueue>());
+        services.AddSingleton<IHealthSnapshotStore, HealthSnapshotStore>();
+        services.AddSingleton<IInsightStore, InsightStore>();
+        services.AddSingleton<IAnalyticsReadStore, AnalyticsReadStore>();
         services.AddHostedService<DatabaseMaintenanceService>();
         services.AddSingleton<IDatabaseDiagnosticsProvider, DatabaseDiagnosticsProvider>();
         services.AddHostedService<BatteryPersistenceBridge>();
@@ -279,6 +284,17 @@ public partial class App : Application
         services.AddSingleton<IProcessMonitoringService>(sp => sp.GetRequiredService<ProcessMonitoringService>());
         services.AddHostedService(sp => sp.GetRequiredService<ProcessMonitoringService>());
 
+        // Analytics (Phase 8) — runtime estimator rides the battery monitor;
+        // AnalyticsService rides session closes + a slow timer. Registered after
+        // Sessions and Power so their state is available.
+        services.AddSingleton<IInsightProvider, RuleBasedInsightProvider>();
+        services.AddSingleton<RuntimeEstimationService>();
+        services.AddSingleton<IRuntimeEstimationService>(sp => sp.GetRequiredService<RuntimeEstimationService>());
+        services.AddHostedService(sp => sp.GetRequiredService<RuntimeEstimationService>());
+        services.AddSingleton<AnalyticsService>();
+        services.AddSingleton<IAnalyticsService>(sp => sp.GetRequiredService<AnalyticsService>());
+        services.AddHostedService(sp => sp.GetRequiredService<AnalyticsService>());
+
         // View models
         services.AddSingleton<ShellViewModel>();
         services.AddTransient<SettingsViewModel>();
@@ -288,6 +304,8 @@ public partial class App : Application
         services.AddTransient<PowerViewModel>();
         services.AddTransient<TemperatureViewModel>();
         services.AddTransient<AppUsageViewModel>();
+        services.AddTransient<StatisticsViewModel>();
+        services.AddTransient<InsightsViewModel>();
         services.AddTransient<AboutViewModel>();
     }
 

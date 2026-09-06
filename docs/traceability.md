@@ -1,6 +1,6 @@
 # Requirements Traceability Matrix
 
-Status: updated after Phase 7. Version 1.0.0.
+Status: updated after Phase 8. Version 1.0.0.
 
 Covers spec §70: requirement → module → implementation → test → status.
 
@@ -38,9 +38,9 @@ Covers spec §70: requirement → module → implementation → test → status.
 | R-022 | Capacity retention / wear | §9 | Core (`BatteryCalculations`) | `full ÷ design`, Calculated. **Deviation:** placed in Core, not Analytics — it is exact arithmetic on every reading, not a statistics feature, and Core's zero-dependency rule keeps it unit-testable without a battery | `BatteryCalculationsTests`: missing design ⇒ Unavailable, not 0; live: 40.0% exact match | ✅ |
 | R-023 | Cycle count where available | §9 | Battery/Core | S4→S3; `ApplyCycleCountZeroQuirk` ⇒ Unavailable | `BatteryCalculationsTests`, `SimulatedBatteryProviderTests`; live: reference machine correctly Unavailable | ✅ |
 | R-024 | Manufacturer / model / chemistry | §9 | Battery | S3→S4; packed-ASCII chemistry tag decoded, little-endian (quirk Q4) | Live: "SMP / DELL 68ND307 / LiP", exact match to `capability-matrix.md` §1 | ✅ |
-| R-025 | Explainable health score | §19 | Analytics | `HealthScoreV1` + `FactorsJson` | Unit: renormalisation matrix | 📋 (Phase 8) |
+| R-025 | Explainable health score | §19 | Core.Analytics | `HealthScoreCalculator` = `HealthScoreV1`; weights renormalise across available factors; `HealthFactor[]` → `FactorsJson` + the "How this score is calculated" expander | `HealthScoreCalculatorTests` (renormalisation matrix, retention-required, band boundaries), `AnalyticsServiceTests`; live: reference machine scores 40 / Poor with retention the only contributing factor (weight renormalised to 1.0) | ✅ |
 | R-026 | No invented health % when data absent | §9 | Core | Retention required, else Unavailable | `BatteryCalculationsTests.CalculateRetentionPercent_DesignCapacityUnavailable_YieldsUnavailable_NotZero` | ✅ |
-| R-027 | Health trend with smoothing | §53 | Analytics | Snapshots + smoothed slope | Unit: noise does not move trend | 📋 (Phase 8) |
+| R-027 | Health trend with smoothing | §53 | Core.Analytics | `DegradationTrendCalculator` — Theil–Sen median slope over ≥30 days of `BatteryHealthSnapshot` retention; `Calculating` below the floor | `DegradationTrendTests` (flat noisy series ⇒ ~zero slope; one outlier does not move it), `AnalyticsServiceTests` | ✅ |
 | R-028 | Multiple batteries | §25 | Battery/Core | `HardwareId`-keyed devices; `BatteryAggregation` sums only mathematically valid quantities | `BatteryAggregationTests`, `SimulatedBatteryProviderTests.MultipleBatteries_*` | ✅ |
 
 ## Power and temperature
@@ -70,7 +70,7 @@ Covers spec §70: requirement → module → implementation → test → status.
 | R-045 | Re-validate devices on resume | §24 | Battery | `BatteryMonitoringService.OnResumed`: re-enumerate + re-run capability detection | Code path shared with Phase 2's `DeviceChange` handling, which is live-verified | ✅ |
 | R-046 | No duplicate/interpolated samples across sleep | §24 | Core | `ProcessResume`/gap detection only add to `SleepSeconds`; never synthesise a sample | `SuspendAndResumeMidDischarge_OneSession_SleepSecondsPopulated_NoInterpolation` | ✅ |
 | R-047 | Session timeline | §12 | Data, Sessions | `ISessionStore.GetTimelineAsync`: real session spans + session/system event markers, merged and ordered | Exercised transitively by integration-style live use; dedicated unit tests not yet written (deferred — see roadmap.md Phase 4 deviations on timeline scope) | 🔨 |
-| R-048 | Consumption split by screen state | §11 | Core | `BatterySample.ScreenState` populated per sample; session accumulates `ScreenOnSeconds`/`ScreenOffSeconds` | `SessionStateMachineTests` (screen accumulation implicit in duration tests); dedicated per-state consumption reporting is Phase 8/Analytics | 🔨 (data captured; reporting deferred) |
+| R-048 | Consumption split by screen state | §11 | Core.Analytics | `DischargeAnalyzer` splits the discharge rate into screen-on and screen-off means from the screen-tagged `RollingRate`; screen-off is never extrapolated from screen-on | `DischargeAnalyzerTests` (split; no screen-off samples ⇒ null), `RuntimeEstimationServiceTests` | ✅ |
 
 ## Applications
 
@@ -94,7 +94,7 @@ Covers spec §70: requirement → module → implementation → test → status.
 | R-064 | WAL mode | §32 | Data | Pragmas applied on every connection (`SqliteConnectionFactory`) | `MigrateAsync_AppliesTheDocumentedPragmas`; live: `-wal`/`-shm` files present | ✅ |
 | R-065 | UI never blocks on DB | §32 | Data, App | `BatteryPersistenceBridge.Enqueue` returns immediately; DB access confined to the write queue's own timer/task | Live: Battery page remained responsive with pending writes queued | ✅ |
 | R-066 | Versioned migrations, no history loss | §64 | Data | `DatabaseMigrator`: transactional per-migration apply, backup from the second migration onward, rollback on failure | `MigrationTests` (idempotency, version recording). **Deviation:** backup-before-migration untested — no V002 exists yet to exercise it (see `roadmap.md` Phase 3 deviations) | 🔨 |
-| R-067 | Tiered aggregation | §31 | Data | `DatabaseMaintenanceService`: idempotent minute rollup only; hour/daily deferred (see `roadmap.md` — no producer data rich enough yet) | `RunRollupAsync_*` (4 tests: rolls old-enough samples, leaves recent ones, excludes Suspect, idempotent) | 🔨 (minute tier only) |
+| R-067 | Tiered aggregation | §31 | Data | `DatabaseMaintenanceService`: minute → hour → daily rollup, each idempotent and gated on the tier below being settled; `DailyStatistics` from closed sessions. Minute/hour/daily retention now enforced | `RunRollupAsync_*` (minute), `RunRollupAsync_RollsSettledHours_IntoSampleHour_*`, `RunRollupAsync_RollsFullyElapsedDays_IntoDailyStatistics_*`, `…DoesNotRollToday_*` | ✅ |
 | R-068 | Retention, no active-session deletion | §29 | Data | Deletes only rolled-up + past-window rows; open-session guard | `RunRetentionAsync_NeverDeletesARowInAnOpenSession`, `RunRetentionAsync_DeletesOldSamples_OnlyAfterTheyAreRolledUp` | ✅ |
 | R-069 | Delete all history with confirmation | §29 | App, Data | Settings action + `VACUUM` | Manual | 📋 (Phase 11/Settings UI) |
 | R-070 | Reject impossible measurements | §63 | Core | `BatterySentinels` (raw sentinel values), `BatterySampleValidation` (plausibility ranges), `PercentageJumpDetector` (awake jump check, Phase 4 — applied in both `BatteryMonitoringService` for sample grading and `SessionStateMachine` for session semantics), and `SessionStateMachine`'s backwards-clock rejection (Phase 4, the monotonic-timestamp guard) | `BatterySentinelsTests`, `BatterySampleValidationTests`, `PercentageJumpDetectorTests`, `SessionStateMachineTests.ClockStepsBackwards_Rejected_SessionPreserved` | ✅ (battery domain) |
@@ -104,12 +104,12 @@ Covers spec §70: requirement → module → implementation → test → status.
 
 | ID | Requirement | Spec | Module | Implementation | Test | Status |
 |---|---|---|---|---|---|---|
-| R-080 | Rolling runtime estimate + confidence | §52 | Analytics | Screen-state-aware EWMA | Unit: tiers; screen-off without history ⇒ U | 📋 |
-| R-081 | Charging quality score | §10, §54 | Analytics | Weighted, personal baseline, ≥5 sessions | Unit | 📋 |
-| R-082 | Statistics: lifetime/today/7d/30d/custom | §16 | Analytics | `StatisticsEngine` over aggregates | Unit: boundaries, DST | 📋 |
-| R-083 | Confidence-gated insights | §18 | Analytics | 4 gates incl. effect > noise | Unit: noise produces none | 📋 |
-| R-084 | `IInsightProvider` abstraction | §34 | Core | Rule-based impl; AI optional, off | Unit | 📋 |
-| R-085 | Insights never unsafe | §77 | Analytics | Curated conservative text | Review + unit on rule corpus | 📋 |
+| R-080 | Rolling runtime estimate + confidence | §52 | Core.Analytics + Analytics | `RuntimeEstimator` (`remaining ÷ rate` per screen state, four §3 tiers, `Calculating` below the floor) driven by `RuntimeEstimationService` over a screen-tagged `RollingRate` | `RuntimeEstimatorTests` (tiers; screen-off without history ⇒ Unavailable; below floor ⇒ Calculating), `RuntimeEstimationServiceTests` | ✅ |
+| R-081 | Charging quality score | §10, §54 | Core.Analytics | `ChargingQualityScorer` = `ChargingQualityV1`; personal 30-day baseline; thermal component dropped + renormalised with no sensor; Unavailable below 5 prior sessions | `ChargingQualityScorerTests` | ✅ (scorer + tests; dedicated UI card is later polish) |
+| R-082 | Statistics: lifetime/today/7d/30d/custom | §16 | Core.Analytics | `StatisticsEngine` — timezone-aware window resolution, midnight-straddling session proration; computes from `BatterySession` rows | `StatisticsEngineTests` (local-midnight start, straddle proration, empty window, DST day) | ✅ |
+| R-083 | Confidence-gated insights | §18 | Core.Analytics | `RuleBasedInsightProvider` — every rule behind 4 gates incl. effect > the metric's own variance | `RuleBasedInsightProviderTests` (within-noise ⇒ zero; genuine effect ⇒ one; confidence below threshold ⇒ suppressed), `AnalyticsServiceTests` | ✅ |
+| R-084 | `IInsightProvider` abstraction | §34 | Core | `IInsightProvider` in Core; `RuleBasedInsightProvider` the default impl; AI provider explicitly out of scope for v1 | `RuleBasedInsightProviderTests` | ✅ |
+| R-085 | Insights never unsafe | §77 | Core.Analytics | Fixed, curated `Title`/`Explanation` strings — only figures substituted; conservative rule corpus (`InsightRulesV1`) | Review of the 7-rule corpus; `RuleBasedInsightProviderTests` | ✅ |
 | R-086 | Configurable alerts + cooldown | §20 | Notifications | Engine with hysteresis | Unit: no storming | 📋 |
 | R-087 | Windows notifications + in-app centre | §21 | Notifications | Toast with in-app fallback | Manual | 📋 |
 | R-088 | Tray, background monitoring | §22 | Windows | `H.NotifyIcon`, close-to-tray | Manual | 📋 |

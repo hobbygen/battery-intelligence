@@ -10,6 +10,22 @@
     mc:Ignorable="d">
 
     <Page.Resources>
+        <DataTemplate x:Key="HealthFactorTemplate" x:DataType="vm:HealthFactorRow">
+            <Grid Padding="2,8" ColumnSpacing="12" BorderBrush="{ThemeResource AppLine2Brush}" BorderThickness="0,0,0,1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Spacing="2">
+                    <TextBlock FontSize="13" FontWeight="SemiBold" Text="{x:Bind Label}" />
+                    <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="{x:Bind Basis}" TextWrapping="Wrap" />
+                </StackPanel>
+                <TextBlock Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource MetricLabelTextStyle}" Text="{x:Bind WeightText}" />
+                <TextBlock Grid.Column="2" VerticalAlignment="Center" MinWidth="56" TextAlignment="Right" FontWeight="SemiBold" Text="{x:Bind ScoreText}" />
+            </Grid>
+        </DataTemplate>
+
         <DataTemplate x:Key="BatteryCardTemplate" x:DataType="vm:BatteryCardDisplay">
             <StackPanel Spacing="20" Margin="0,0,0,20">
 
@@ -82,7 +98,7 @@
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0">
                 <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="Battery" />
-                <TextBlock Style="{StaticResource PageSubtitleTextStyle}" Text="Identity, capacity and health. The health score, degradation trend and charging quality land with the analytics work in Phase 8." />
+                <TextBlock Style="{StaticResource PageSubtitleTextStyle}" Text="Identity, capacity, health score, degradation trend and remaining runtime." />
             </StackPanel>
             <Button
                 Grid.Column="1"
@@ -116,6 +132,71 @@
                     HorizontalContentAlignment="Stretch" />
 
                 <ItemsControl ItemsSource="{x:Bind ViewModel.Batteries, Mode=OneWay}" ItemTemplate="{StaticResource BatteryCardTemplate}" />
+
+                <!-- Battery Health Score -->
+                <Border Style="{StaticResource CardBorderStyle}" Padding="24,22">
+                    <StackPanel Spacing="16">
+                        <controls:CardHeader Glyph="&#xE95E;" Text="BATTERY HEALTH SCORE" />
+
+                        <StackPanel Visibility="{x:Bind ViewModel.HealthUnavailable, Mode=OneWay}" Spacing="6">
+                            <TextBlock Style="{StaticResource SecondaryMetricTextStyle}" Text="Unavailable" />
+                            <TextBlock Foreground="{ThemeResource AppText2Brush}" TextWrapping="Wrap"
+                                Text="The score requires capacity retention (full-charge ÷ design capacity). One of those readings is not available on this hardware, so no score is shown — a number built only on behavioural proxies would have nothing real underneath it." />
+                        </StackPanel>
+
+                        <StackPanel Visibility="{x:Bind ViewModel.HealthAvailable, Mode=OneWay}" Spacing="14">
+                            <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Bottom">
+                                <TextBlock Style="{StaticResource HeroMetricTextStyle}" Text="{x:Bind ViewModel.HealthScoreText, Mode=OneWay}" />
+                                <TextBlock VerticalAlignment="Center" Style="{StaticResource SecondaryMetricTextStyle}" Foreground="{ThemeResource AppText2Brush}" Text="{x:Bind ViewModel.HealthCategoryText, Mode=OneWay}" />
+                                <Border Style="{StaticResource GradeBadgeAccentBorderStyle}">
+                                    <TextBlock Style="{StaticResource GradeBadgeTextStyle}" Foreground="{ThemeResource AppAccentDeepBrush}" Text="ESTIMATED" />
+                                </Border>
+                            </StackPanel>
+                            <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Header="How this score is calculated">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Style="{StaticResource MetricLabelTextStyle}" TextWrapping="Wrap"
+                                        Text="HealthScoreV1 — a weighted score over the available factors only. Weights are renormalised across whatever this hardware can report; a factor with no data has its weight redistributed to the others." />
+                                    <ItemsControl ItemsSource="{x:Bind ViewModel.HealthFactors, Mode=OneWay}" ItemTemplate="{StaticResource HealthFactorTemplate}" />
+                                </StackPanel>
+                            </Expander>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Degradation trend -->
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="12">
+                        <controls:CardHeader Glyph="&#xE9D2;" Text="DEGRADATION TREND" />
+                        <controls:Sparkline
+                            Height="60"
+                            Visibility="{x:Bind ViewModel.HasRetentionSpark, Mode=OneWay}"
+                            Values="{x:Bind ViewModel.RetentionSpark, Mode=OneWay}"
+                            LineBrush="{ThemeResource AppAccentBrush}"
+                            FillBrush="{ThemeResource AppAccentSoftBrush}" />
+                        <TextBlock Foreground="{ThemeResource AppText2Brush}" TextWrapping="Wrap" Text="{x:Bind ViewModel.DegradationLine, Mode=OneWay}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Time remaining -->
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="14">
+                        <controls:CardHeader Glyph="&#xE945;" Text="TIME REMAINING" />
+                        <StackPanel Visibility="{x:Bind ViewModel.RuntimeCalculating, Mode=OneWay}" Spacing="4">
+                            <TextBlock Style="{StaticResource SecondaryMetricTextStyle}" Text="Calculating…" />
+                            <TextBlock Foreground="{ThemeResource AppText2Brush}" TextWrapping="Wrap"
+                                Text="A wildly wrong estimate on launch costs more trust than a short wait. The figure appears once there is at least a minute of discharge history." />
+                        </StackPanel>
+                        <StackPanel Visibility="{x:Bind ViewModel.RuntimeAvailable, Mode=OneWay}" Spacing="10">
+                            <StackPanel Orientation="Horizontal" Spacing="30">
+                                <controls:MetricStat Label="At current usage" Value="{x:Bind ViewModel.RuntimeAtCurrent, Mode=OneWay}" />
+                                <controls:MetricStat Label="Screen on" Value="{x:Bind ViewModel.RuntimeScreenOn, Mode=OneWay}" />
+                                <controls:MetricStat Label="Screen off" Value="{x:Bind ViewModel.RuntimeScreenOff, Mode=OneWay}" />
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource MetricLabelTextStyle}" TextWrapping="Wrap" Text="{x:Bind ViewModel.RuntimeConfidence, Mode=OneWay}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
             </StackPanel>
         </ScrollViewer>
     </Grid>

@@ -23,6 +23,8 @@ public sealed class AppSettings
 
     public ProcessMonitoringSettings Processes { get; set; } = new();
 
+    public AnalyticsSettings Analytics { get; set; } = new();
+
     public AlertSettings Alerts { get; set; } = new();
 
     public NotificationSettings Notifications { get; set; } = new();
@@ -47,6 +49,7 @@ public sealed class AppSettings
         Appearance.Validate();
         Monitoring.Validate();
         Processes.Validate();
+        Analytics.Validate();
         Alerts.Validate();
         Notifications.Validate();
         Data.Validate();

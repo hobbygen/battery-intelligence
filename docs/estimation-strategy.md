@@ -116,6 +116,17 @@ be claimed as a guaranteed value.
 Showing "Calculating…" rather than a low-quality number in the first minute is
 deliberate. A wildly wrong estimate on launch costs more trust than a brief wait.
 
+### As built (Phase 8)
+
+`Core.Analytics.RuntimeEstimator` (pure) + `Analytics.RuntimeEstimationService`
+(rides `IBatteryMonitoringService.Updated`, like the thermal service). The rate is
+a recency-weighted mean (`RollingRate`, exponential half-life = window/2) over the
+configured `RuntimeWindowMinutes` (15 by default), tagged by screen state. The
+confidence tiers match the table above; the "≥3 comparable historical periods"
+input is approximated on the live path from the in-window sample count (there is
+no cross-session store on that path). The screen-off figure stays `null` —
+"Not enough screen-off history yet" — until real screen-off samples arrive.
+
 ---
 
 ## 4. Battery health (spec §9, §19)
@@ -165,6 +176,24 @@ The label is always **"Battery Health Score"**, never "Battery Health" alone, an
 the methodology link is always adjacent. Spec §19 warns against making the score
 appear scientifically authoritative; the naming and the always-visible explanation
 are how that is honoured.
+
+### As built (Phase 8)
+
+`Core.Analytics.HealthScoreCalculator`, `Version = "HealthScoreV1"`, and
+`DegradationTrendCalculator`. Confirmed against this design, with one deviation:
+
+- **The degradation trend uses a Theil–Sen median slope**, not ordinary least
+  squares. The design says "slope of retention over ≥30 days"; the exit criterion
+  is "noise does not move the trend", and a single anomalous full-charge reading
+  swings an OLS line. The median of all pairwise slopes does not.
+
+Each factor's raw metric is mapped to a 0–1 sub-score inside the calculator (one
+place, unit-tested); weights renormalise across the factors that have data. On the
+reference machine — no cycle count, no temperature sensor, and less than a month
+of history — the score comes from retention alone, its weight renormalised to 1.0,
+and lands at 40 / Poor for the real 40 %-retention battery. `EstimateConfidence`
+({ Calculating, Low, Medium, High }) is the shared confidence tier for every
+rolling estimate.
 
 ---
 
@@ -279,6 +308,11 @@ Requires ≥5 prior comparable sessions. Below that the score is **Unavailable**
 "Not enough history yet" — satisfying spec §10's rule that comparative insights are
 generated only when sufficient history exists.
 
+**As built (Phase 8):** `Core.Analytics.ChargingQualityScorer`,
+`Version = "ChargingQualityV1"`, matching this table. The thermal component is
+dropped and the remaining weights renormalised when there is no sensor. The scorer
+and its tests ship; a dedicated charging-quality card is later UI polish.
+
 ---
 
 ## 7. Insight confidence (spec §18)
@@ -298,6 +332,14 @@ credible.
 
 Every insight stores its confidence, its supporting metrics, its period, and its
 rule version, and the UI shows them.
+
+**As built (Phase 8):** `Core.Analytics.RuleBasedInsightProvider`,
+`RuleVersion = "InsightRulesV1"`, 7 rules (fast drain, slow charging, health
+degrading, high-temperature exposure, screen dominates drain, deep-discharge
+habit, good charging habits). Gate 3 is enforced against the prior sample's own
+standard deviation — a deviation must exceed one noise-width, not merely be
+non-zero. The default confidence threshold is `AnalyticsSettings.InsightConfidenceThreshold`
+(0.7). All text is fixed; only the figures are substituted.
 
 ---
 

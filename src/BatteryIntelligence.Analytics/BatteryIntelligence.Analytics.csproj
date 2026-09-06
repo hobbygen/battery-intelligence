@@ -5,6 +5,19 @@
     <RootNamespace>BatteryIntelligence.Analytics</RootNamespace>
   </PropertyGroup>
 
+  <!--
+    Plain net10.0, not net10.0-windows: analytics is arithmetic over history — no
+    Win32 or WinRT APIs — which keeps the whole engine unit-testable without a
+    battery. Core-only reference by design (docs/architecture.md section 3): the
+    hosted services consume IBatteryMonitoringService, ISessionMonitoringService,
+    IAnalyticsReadStore, IHealthSnapshotStore, IInsightStore and IInsightProvider,
+    all declared in Core, so Analytics never references Battery or Data directly.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\BatteryIntelligence.Core\BatteryIntelligence.Core.csproj" />
   </ItemGroup>

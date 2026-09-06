@@ -6,12 +6,13 @@ with exit criteria and deviations) and docs/traceability.md (requirement ->
 implementation -> test). This file is the fast orientation layer on top of those.
 
 ============================================================
-CURRENT STATUS: Phase 7 of 15 complete. Application usage (AppEnergyV1) shipped.
-Ready to start Phase 8 (Analytics).
+CURRENT STATUS: Phase 8 of 15 complete. Analytics engine shipped —
+health score, degradation trend, runtime estimate, statistics, insights.
+Ready to start Phase 9 (Alerts).
 ============================================================
 
 Solution builds clean (0 warnings, 0 errors) in Debug and Release.
-Test totals: 212 passing — 158 Tests.Unit, 24 Tests.Simulation, 30 Tests.Integration.
+Test totals: 264 passing — 195 Tests.Unit, 30 Tests.Simulation, 39 Tests.Integration.
 Verified live on the reference machine (Dell laptop, Windows 11 build 26200,
 battery DELL 68ND307 / SMP / LiP, 40.0% retention — this is a real worn battery,
 not an error, and is documented as the reference reading in capability-matrix.md).
@@ -21,8 +22,8 @@ To rebuild and re-verify from scratch:
   dotnet build BatteryIntelligence.slnx -c Release
   dotnet test BatteryIntelligence.slnx -c Debug
   dotnet run --project src/BatteryIntelligence.App/BatteryIntelligence.App.csproj -c Debug
-    (launches the real WinUI app; Battery, Power, Sessions, Temperature, App Usage
-     and Diagnostics pages show live data)
+    (launches the real WinUI app; Dashboard, Battery, Power, Sessions, Temperature,
+     App Usage, Statistics and Diagnostics pages show live data)
 
 ------------------------------------------------------------
 PHASE 0 — Architecture (complete, done before this session history began)
@@ -442,23 +443,84 @@ Key deviations (see docs/roadmap.md Phase 7 for the full list):
   untested until a real schema change ships.
 - Attribution is system-wide, not per-battery (one process context).
 
-============================================================
-WHAT'S NEXT: PHASE 8 — Analytics
-============================================================
-Per docs/roadmap.md: HealthScoreV1 with weight renormalisation and FactorsJson,
-degradation trend with smoothing, charging quality score, discharge analysis,
-rolling runtime estimator with confidence, statistics engine
-(lifetime/today/7d/30d/custom), RuleBasedInsightProvider behind IInsightProvider,
-Statistics page.
-Depends on: Phases 3, 4, 5, 6, 7 — all done.
-Exit: score renormalises correctly with cycle count and temperature both absent;
-insights suppressed below confidence and effect-size thresholds; "How this score
-is calculated" renders real per-factor contributions.
+------------------------------------------------------------
+PHASE 8 — Analytics (complete)
+------------------------------------------------------------
+The layer the PRD calls the app's most valuable output — the long-term
+degradation trend — plus health score, charging quality, discharge analysis,
+rolling runtime estimate, statistics engine, rule-based insights. Built like
+Phases 5-7: pure math in Core.Analytics, a promoted infra-sibling orchestrator,
+Data stores behind Core seams, coalesced view models. BatteryHealthSnapshot,
+Insight, SampleHour, DailyStatistics all exist from V001 — NO migration.
 
-The Statistics page and the Dashboard "Smart Insights" card are already built as
-honest "arrives in Phase 8" empty states — Phase 8 replaces their content.
-DailyStatistics (table exists since V001, still no producer) and SampleHour get
-their first producer in this phase / Phase 11.
+What shipped:
+- Core.Analytics (pure, net10.0): LinearFit (Theil-Sen median slope),
+  RollingRate (recency-weighted rate per screen state), HealthScoreCalculator
+  ("HealthScoreV1" — retention required, weights renormalise across available
+  factors, HealthFactor[] for the explanation), DegradationTrendCalculator
+  (smoothed slope + 90-day projection + confidence), ChargingQualityScorer
+  ("ChargingQualityV1"), DischargeAnalyzer (screen-on/off split, never
+  extrapolated — closes R-048), RuntimeEstimator (remaining / rate per screen
+  state, the 4 confidence tiers, "Calculating..." below the floor),
+  StatisticsEngine (tz-aware windows, midnight-straddle proration — computes
+  from sessions directly), RuleBasedInsightProvider ("InsightRulesV1", 7 curated
+  rules each behind 4 gates incl. effect > noise).
+- New Core models/enums/interfaces + AnalyticsSettings config category.
+- Analytics project: PROMOTED from the ModuleMarker stub, stays plain net10.0
+  (analytics is arithmetic — whole engine unit-testable), Core-only ref.
+  RuntimeEstimationService rides IBatteryMonitoringService.Updated; AnalyticsService
+  (hosted, slow timer + session-close hook) computes the health score, appends a
+  BatteryHealthSnapshot, recomputes the trend, runs the insight provider,
+  replaces the active insight set; serves GetStatisticsAsync.
+- Data: BatteryHealthSnapshotRepository/InsightRepository + HealthSnapshotStore/
+  InsightStore/AnalyticsReadStore (Core seams). DatabaseMaintenanceService gained
+  the SampleHour + DailyStatistics rollup producers (closes R-067) + minute/hour/
+  daily retention. HealthSnapshotRowCount/InsightRowCount on the Diagnostics facts.
+- App: StatisticsViewModel + rebuilt StatisticsPage (Today/7d/30d/Lifetime
+  selector, summary tiles, charge-vs-discharge bars, screen-on share).
+  BatteryViewModel + BatteryPage: "Battery Health Score" card with a working
+  "How this score is calculated" expander, "Degradation trend" card,
+  "Time remaining" card. InsightsViewModel + Dashboard "Smart Insights" card
+  (qualifying insights or the honest suppressed state); Dashboard "Battery
+  Health" card shows the real score + trend line. About gained the full
+  HealthScoreV1 / trend / ChargingQualityV1 / runtime / insight-gates methodology.
+
+Verified live on the reference machine (2026-09-06): 3 BatteryHealthSnapshot rows,
+HealthScore = 40 / Poor, FactorsJson shows retention as the ONLY contributing
+factor with NormalisedWeight = 1.0 (degradation, cycles, thermal all redistributed
+— exactly the R-025 exit criterion for the no-cycle-count, no-sensor reference
+config). 8 SampleHour rows + 1 DailyStatistics row (both rollup tiers working).
+0 Insight rows — honest: nothing clears the gates without session history. No
+crash, no layout cycle. Solution builds clean Debug + Release; 264 tests pass
+(195 + 30 + 39).
+
+Key deviations (see docs/roadmap.md Phase 8):
+- Degradation trend uses a Theil-Sen median slope, not OLS — one anomalous
+  full-charge reading otherwise swings the line, and the exit criterion is
+  "noise does not move the trend".
+- StatisticsEngine computes from BatterySession rows directly, not the
+  DailyStatistics tier (sessions are never pruned). The SampleHour + DailyStatistics
+  producers still ship (close R-067); Phase 11 (History) consumes the tiers.
+- DailyStatistics temperature + end-of-day-health columns left null for now.
+- Charging quality is computed + unit-tested but has no dedicated card yet.
+- RuntimeEstimationService is a separate hosted service, not folded into Power.
+- Statistics window selector: Today/7d/30d/Lifetime (custom range is Phase 11).
+- No V002 migration — every table used exists from V001.
+
+============================================================
+WHAT'S NEXT: PHASE 9 — Alerts
+============================================================
+Per docs/roadmap.md: alert engine with thresholds, hysteresis and cooldown;
+Windows notifications with in-app fallback; alert history; per-alert
+configuration; Alerts page.
+Depends on: Phases 2, 3, 8 — all done.
+Exit: no duplicate or storming notifications; every default alert from spec §20
+configurable; notification failure degrades to in-app without error.
+
+The Alerts page and the title-bar alert bell are already built as honest
+"arrives in Phase 9" placeholders. AlertSettings (spec §20/§35) already exists in
+SettingsCategories.cs; the Alert table exists from V001. The Notifications project
+is still a stub (promote it in Phase 9).
 
 ============================================================
 PROJECT STRUCTURE QUICK MAP (for when you do need to open files)
@@ -483,12 +545,17 @@ src/BatteryIntelligence.ProcessMonitoring — ProcessMonitoringService (orchestr
     + SystemProcessEnumerator + ProcessGroupingTableLoader. ProcessCpuCalculator,
     ProcessGrouping, BaselineEstimator, AppEnergyEstimator live in Core.Processes.
     Core-only reference (infra sibling). net10.0-windows.
+src/BatteryIntelligence.Analytics — AnalyticsService + RuntimeEstimationService
+    (orchestrators). HealthScoreCalculator, DegradationTrendCalculator,
+    ChargingQualityScorer, DischargeAnalyzer, RuntimeEstimator, StatisticsEngine,
+    RuleBasedInsightProvider, LinearFit, RollingRate live in Core.Analytics.
+    Core-only reference (infra sibling). Plain net10.0 — analytics is arithmetic.
 src/BatteryIntelligence.App           — WinUI 3 shell, Views, ViewModels, composition root (App.xaml.cs).
     Resources/AppTheme.xaml holds the Claude Design tokens; Controls/{Segmented,
     CardHeader,MetricStat,Sparkline} are the new design primitives; Controls/PowerChart
     is the only file touching LiveChartsCore.
-src/BatteryIntelligence.{Analytics,Notifications,Reporting}
-    — stub projects, not yet implemented (their phases are 8,9,11 respectively)
+src/BatteryIntelligence.{Notifications,Reporting}
+    — stub projects, not yet implemented (their phases are 9,11 respectively)
 tests/BatteryIntelligence.Tests.Unit         — pure logic, net10.0, fast.
     Includes Sessions/SessionStateMachineTests.cs — the full scenario matrix.
 tests/BatteryIntelligence.Tests.Simulation   — scripted hardware scenarios, net10.0-windows,

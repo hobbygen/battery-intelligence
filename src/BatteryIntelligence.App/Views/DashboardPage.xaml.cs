@@ -17,6 +17,7 @@ public sealed partial class DashboardPage : Page
         Sessions = App.Services.GetRequiredService<SessionsViewModel>();
         Temperature = App.Services.GetRequiredService<TemperatureViewModel>();
         AppUsage = App.Services.GetRequiredService<AppUsageViewModel>();
+        Insights = App.Services.GetRequiredService<InsightsViewModel>();
         _navigation = App.Services.GetRequiredService<INavigationService>();
         InitializeComponent();
 
@@ -29,6 +30,7 @@ public sealed partial class DashboardPage : Page
             Sessions.Dispose();
             Temperature.Dispose();
             AppUsage.Dispose();
+            Insights.Dispose();
         };
     }
 
@@ -46,6 +48,9 @@ public sealed partial class DashboardPage : Page
 
     /// <summary>Top application by estimated battery impact, for the usage card.</summary>
     public AppUsageViewModel AppUsage { get; }
+
+    /// <summary>Qualifying rule-based insights for the Smart Insights card.</summary>
+    public InsightsViewModel Insights { get; }
 
     private void OnViewBatteryDetailsClick(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {

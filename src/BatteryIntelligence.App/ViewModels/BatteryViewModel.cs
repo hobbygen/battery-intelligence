@@ -1,3 +1,5 @@
+using System.Globalization;
+using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Interfaces;
 using BatteryIntelligence.Core.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -5,6 +7,9 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Dispatching;
 
 namespace BatteryIntelligence.App.ViewModels;
+
+/// <summary>One row of the "How this score is calculated" breakdown.</summary>
+public sealed record HealthFactorRow(string Label, string WeightText, string ScoreText, string Basis, bool Contributed);
 
 /// <summary>
 /// Backs the Battery page and the Dashboard's battery card: identity, capacity,
@@ -20,6 +25,8 @@ namespace BatteryIntelligence.App.ViewModels;
 public sealed partial class BatteryViewModel : ObservableObject, IDisposable
 {
     private readonly IBatteryMonitoringService _monitoring;
+    private readonly IAnalyticsService _analytics;
+    private readonly IRuntimeEstimationService _runtime;
     private readonly DispatcherQueue _dispatcher;
 
     private bool _hasBattery;
@@ -27,16 +34,146 @@ public sealed partial class BatteryViewModel : ObservableObject, IDisposable
     private IReadOnlyList<BatteryCardDisplay> _batteries = [];
     private BatteryCardDisplay? _aggregate;
 
-    public BatteryViewModel(IBatteryMonitoringService monitoring)
+    private bool _healthAvailable;
+    private string _healthScoreText = "—";
+    private string _healthCategoryText = "Calculating";
+    private string _healthCategoryKey = "unknown";
+    private IReadOnlyList<HealthFactorRow> _healthFactors = [];
+    private string _degradationLine = "The 90-day degradation trend needs about a month of history.";
+    private bool _degradationAvailable;
+    private IReadOnlyList<double> _retentionSpark = [];
+    private string _runtimeAtCurrent = "Calculating…";
+    private string _runtimeScreenOn = "—";
+    private string _runtimeScreenOff = "Not enough screen-off history yet";
+    private string _runtimeConfidence = string.Empty;
+    private bool _runtimeAvailable;
+
+    public BatteryViewModel(
+        IBatteryMonitoringService monitoring,
+        IAnalyticsService analytics,
+        IRuntimeEstimationService runtime)
     {
         ArgumentNullException.ThrowIfNull(monitoring);
+        ArgumentNullException.ThrowIfNull(analytics);
+        ArgumentNullException.ThrowIfNull(runtime);
 
         _monitoring = monitoring;
+        _analytics = analytics;
+        _runtime = runtime;
         _dispatcher = DispatcherQueue.GetForCurrentThread();
 
         _monitoring.Updated += OnMonitoringUpdated;
+        _analytics.Updated += OnAnalyticsUpdated;
+        _runtime.Updated += OnRuntimeUpdated;
         ApplySnapshot();
+        ApplyAnalytics();
+        ApplyRuntime();
     }
+
+    /// <summary>Whether a Battery Health Score is available (retention was computable).</summary>
+    public bool HealthAvailable
+    {
+        get => _healthAvailable;
+        private set
+        {
+            if (SetProperty(ref _healthAvailable, value))
+            {
+                OnPropertyChanged(nameof(HealthUnavailable));
+            }
+        }
+    }
+
+    public bool HealthUnavailable => !HealthAvailable;
+
+    public string HealthScoreText
+    {
+        get => _healthScoreText;
+        private set => SetProperty(ref _healthScoreText, value);
+    }
+
+    public string HealthCategoryText
+    {
+        get => _healthCategoryText;
+        private set => SetProperty(ref _healthCategoryText, value);
+    }
+
+    /// <summary>"excellent" / "good" / "fair" / "poor" / "critical" — for a status-chip style selector.</summary>
+    public string HealthCategoryKey
+    {
+        get => _healthCategoryKey;
+        private set => SetProperty(ref _healthCategoryKey, value);
+    }
+
+    public IReadOnlyList<HealthFactorRow> HealthFactors
+    {
+        get => _healthFactors;
+        private set => SetProperty(ref _healthFactors, value);
+    }
+
+    public string DegradationLine
+    {
+        get => _degradationLine;
+        private set => SetProperty(ref _degradationLine, value);
+    }
+
+    public bool DegradationAvailable
+    {
+        get => _degradationAvailable;
+        private set => SetProperty(ref _degradationAvailable, value);
+    }
+
+    public IReadOnlyList<double> RetentionSpark
+    {
+        get => _retentionSpark;
+        private set
+        {
+            if (SetProperty(ref _retentionSpark, value))
+            {
+                OnPropertyChanged(nameof(HasRetentionSpark));
+            }
+        }
+    }
+
+    public bool HasRetentionSpark => _retentionSpark.Count >= 3;
+
+    public string RuntimeAtCurrent
+    {
+        get => _runtimeAtCurrent;
+        private set => SetProperty(ref _runtimeAtCurrent, value);
+    }
+
+    public string RuntimeScreenOn
+    {
+        get => _runtimeScreenOn;
+        private set => SetProperty(ref _runtimeScreenOn, value);
+    }
+
+    public string RuntimeScreenOff
+    {
+        get => _runtimeScreenOff;
+        private set => SetProperty(ref _runtimeScreenOff, value);
+    }
+
+    public string RuntimeConfidence
+    {
+        get => _runtimeConfidence;
+        private set => SetProperty(ref _runtimeConfidence, value);
+    }
+
+    /// <summary>Whether a real runtime figure exists (not "Calculating…").</summary>
+    public bool RuntimeAvailable
+    {
+        get => _runtimeAvailable;
+        private set
+        {
+            if (SetProperty(ref _runtimeAvailable, value))
+            {
+                OnPropertyChanged(nameof(RuntimeCalculating));
+            }
+        }
+    }
+
+    public bool RuntimeCalculating => !RuntimeAvailable;
 
     /// <summary>Whether at least one battery is present. Drives the empty state.</summary>
     public bool HasBattery
@@ -94,7 +231,11 @@ public sealed partial class BatteryViewModel : ObservableObject, IDisposable
     public BatteryCardDisplay? Primary => Aggregate ?? Batteries.FirstOrDefault();
 
     [RelayCommand]
-    private async Task RefreshAsync() => await _monitoring.RefreshAsync().ConfigureAwait(false);
+    private async Task RefreshAsync()
+    {
+        await _monitoring.RefreshAsync().ConfigureAwait(false);
+        await _analytics.RefreshAsync().ConfigureAwait(false);
+    }
 
     private void OnMonitoringUpdated(object? sender, EventArgs e)
     {
@@ -104,6 +245,105 @@ public sealed partial class BatteryViewModel : ObservableObject, IDisposable
         // Updated fires on the thread pool (IBatteryMonitoringService contract);
         // every bound property must change on the UI thread.
         _dispatcher.TryEnqueue(ApplySnapshot);
+    }
+
+    private void OnAnalyticsUpdated(object? sender, EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        _dispatcher.TryEnqueue(ApplyAnalytics);
+    }
+
+    private void OnRuntimeUpdated(object? sender, EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        _dispatcher.TryEnqueue(ApplyRuntime);
+    }
+
+    private void ApplyAnalytics()
+    {
+        HealthScore health = _analytics.CurrentHealth;
+        HealthAvailable = health.IsAvailable;
+
+        if (health.Score is double score)
+        {
+            HealthScoreText = score.ToString("F0", CultureInfo.InvariantCulture);
+            HealthCategoryText = health.Category.ToString();
+            HealthCategoryKey = health.Category.ToString().ToLowerInvariant();
+        }
+        else
+        {
+            HealthScoreText = "—";
+            HealthCategoryText = "Unavailable";
+            HealthCategoryKey = "unknown";
+        }
+
+        HealthFactors =
+        [
+            .. health.Factors.Select(f => new HealthFactorRow(
+                f.Label,
+                f.Contributed ? $"{f.NormalisedWeight * 100:F0}% weight" : "weight redistributed",
+                f.Score01 is double s ? $"{s * 100:F0}/100" : "—",
+                f.Basis,
+                f.Contributed)),
+        ];
+
+        DegradationTrend trend = _analytics.Trend;
+        DegradationAvailable = trend.IsAvailable;
+        DegradationLine = trend.IsAvailable
+            ? string.Create(CultureInfo.InvariantCulture,
+                $"About {-(trend.SlopePercentPerMonth ?? 0):+0.0;-0.0;0.0} points/month over {(trend.ToUtc - trend.FromUtc).TotalDays:F0} days · projected {trend.ProjectedRetentionPercentIn90Days:F0}% in 90 days ({trend.Confidence} confidence).")
+            : "The 90-day degradation trend needs about a month of health history — collecting it now.";
+
+        _ = LoadRetentionSparkAsync();
+    }
+
+    private async Task LoadRetentionSparkAsync()
+    {
+        try
+        {
+            IReadOnlyList<RetentionPoint> points = await _analytics.GetRetentionHistoryAsync().ConfigureAwait(true);
+            RetentionSpark = [.. points.Select(p => p.RetentionPercent)];
+        }
+        catch
+        {
+            RetentionSpark = [];
+        }
+    }
+
+    private void ApplyRuntime()
+    {
+        RuntimeEstimate estimate = _runtime.Current;
+        RuntimeAvailable = estimate.IsAvailable;
+
+        if (!estimate.IsAvailable)
+        {
+            RuntimeAtCurrent = "Calculating…";
+            RuntimeScreenOn = "—";
+            RuntimeScreenOff = "—";
+            RuntimeConfidence = "Not enough discharge history yet.";
+            return;
+        }
+
+        RuntimeAtCurrent = FormatRuntime(estimate.AtCurrentUsage);
+        RuntimeScreenOn = FormatRuntime(estimate.ScreenOn);
+        RuntimeScreenOff = estimate.ScreenOff is TimeSpan off
+            ? FormatRuntime(off)
+            : "Not enough screen-off history yet";
+        RuntimeConfidence = string.Create(CultureInfo.InvariantCulture, $"{estimate.Confidence} confidence · {estimate.Basis}");
+    }
+
+    private static string FormatRuntime(TimeSpan? span)
+    {
+        if (span is not TimeSpan t)
+        {
+            return "—";
+        }
+
+        return t.TotalHours >= 1
+            ? string.Create(CultureInfo.InvariantCulture, $"{(int)t.TotalHours} h {t.Minutes:D2} min")
+            : string.Create(CultureInfo.InvariantCulture, $"{(int)t.TotalMinutes} min");
     }
 
     private void ApplySnapshot()
@@ -125,5 +365,10 @@ public sealed partial class BatteryViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(Primary));
     }
 
-    public void Dispose() => _monitoring.Updated -= OnMonitoringUpdated;
+    public void Dispose()
+    {
+        _monitoring.Updated -= OnMonitoringUpdated;
+        _analytics.Updated -= OnAnalyticsUpdated;
+        _runtime.Updated -= OnRuntimeUpdated;
+    }
 }

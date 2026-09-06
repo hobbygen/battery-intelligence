@@ -61,6 +61,23 @@ public sealed class SettingsValidationTests
     }
 
     [Fact]
+    public void AnalyticsThresholds_AreClampedToSaneRanges()
+    {
+        AppSettings settings = new();
+        settings.Analytics.InsightConfidenceThreshold = 0.1;
+        settings.Analytics.HealthSnapshotIntervalMinutes = 100_000;
+        settings.Analytics.DegradationMinSpanDays = 1;
+        settings.Analytics.ChargingQualityMinSessions = 1;
+
+        settings.Validate();
+
+        Assert.InRange(settings.Analytics.InsightConfidenceThreshold, 0.5, 0.99);
+        Assert.InRange(settings.Analytics.HealthSnapshotIntervalMinutes, 5, 1440);
+        Assert.InRange(settings.Analytics.DegradationMinSpanDays, 7, 365);
+        Assert.InRange(settings.Analytics.ChargingQualityMinSessions, 3, 50);
+    }
+
+    [Fact]
     public void CriticalThreshold_IsForcedBelowLowThreshold()
     {
         // Otherwise the two alerts fight, and the user gets a critical warning

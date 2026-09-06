@@ -161,6 +161,14 @@ public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
                 database.ProcessSampleRowCount.ToString("N0", CultureInfo.InvariantCulture),
                 "ProcessSample — one row per ranked application per 10 s tick"));
             entries.Add(new DiagnosticEntry(
+                "Health snapshots",
+                database.HealthSnapshotRowCount.ToString("N0", CultureInfo.InvariantCulture),
+                "BatteryHealthSnapshot — one per analytics pass, feeds the degradation trend"));
+            entries.Add(new DiagnosticEntry(
+                "Active insights",
+                database.InsightRowCount.ToString("N0", CultureInfo.InvariantCulture),
+                "Insight — rule-based, confidence-gated"));
+            entries.Add(new DiagnosticEntry(
                 "Last write",
                 database.LastWriteUtc is DateTimeOffset lastWrite ? DescribeAgo(lastWrite) : "Not written yet this session",
                 "Write queue"));

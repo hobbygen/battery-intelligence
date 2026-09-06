@@ -618,17 +618,107 @@ verbatim from `V001`, so **no migration** was needed.
 
 ---
 
-## Phase 8 — Analytics
+## Phase 8 — Analytics (complete)
 
-**Deliverables:** `HealthScoreV1` with weight renormalisation and `FactorsJson`,
-degradation trend with smoothing, charging quality score, discharge analysis,
-rolling runtime estimator with confidence, statistics engine (lifetime/today/7d/
-30d/custom), `RuleBasedInsightProvider` behind `IInsightProvider`, Statistics page.
+The layer the PRD calls the application's most valuable output — the long-term
+degradation trend — plus the health score, charging quality, discharge analysis,
+the rolling runtime estimate, the statistics engine and the rule-based insight
+provider. Built like Phases 5–7: pure math in `Core.Analytics`, a promoted
+infrastructure-sibling orchestrator, Data stores behind Core seams, coalesced
+view models. `BatteryHealthSnapshot`, `Insight`, `SampleHour` and
+`DailyStatistics` all exist verbatim from `V001` — **no migration**.
 
-**Depends on:** 3, 4, 5, 6, 7. **Exit:** score renormalises correctly with cycle
-count and temperature both absent; insights suppressed below confidence and
-effect-size thresholds; "How this score is calculated" renders real per-factor
-contributions.
+**What shipped:**
+
+- `Core.Analytics` (pure, net10.0): `LinearFit` (Theil–Sen median slope +
+  robust residual), `RollingRate` (recency-weighted discharge rate per screen
+  state), `HealthScoreCalculator` (`HealthScoreV1` — retention required, weights
+  renormalise across the available factors, `HealthFactor[]` for the
+  explanation), `DegradationTrendCalculator` (smoothed slope + 90-day projection
+  + confidence, `Calculating` below the floor), `ChargingQualityScorer`
+  (`ChargingQualityV1`, thermal component dropped + renormalised with no sensor,
+  ≥5 prior sessions), `DischargeAnalyzer` (screen-on/off rate split, never
+  extrapolated — closes R-048), `RuntimeEstimator` (`remaining ÷ rate` per
+  screen state, the four §3 confidence tiers, screen-off Unavailable without
+  history), `StatisticsEngine` (timezone-aware window resolution, session
+  proration across midnight — computes from sessions directly),
+  `RuleBasedInsightProvider` (`InsightRulesV1` — 7 curated rules, each behind the
+  four §7 gates, fixed text).
+- New `Core` models/enums (`HealthScore`/`HealthFactor`, `DegradationTrend`,
+  `ChargingQuality`, `DischargeAnalysis`, `RuntimeEstimate`, `StatisticsSummary`,
+  `AnalyticsInsight`, `AnalyticsContext`, `DateRange`, `HealthCategory`,
+  `EstimateConfidence`, `InsightType`, `InsightSeverity`, `StatisticsWindow`),
+  interfaces (`IInsightProvider`, `IAnalyticsService`, `IRuntimeEstimationService`,
+  `IHealthSnapshotStore`, `IInsightStore`, `IAnalyticsReadStore`), and an
+  `AnalyticsSettings` config category (thresholds, not code constants — spec §66).
+- `Analytics` project: **promoted from the `ModuleMarker` stub**, stays plain
+  `net10.0` (analytics is arithmetic — no Windows APIs — so the whole engine is
+  unit-testable), Core-only reference. `RuntimeEstimationService` rides
+  `IBatteryMonitoringService.Updated` and exposes the live runtime estimate + the
+  recent discharge breakdown. `AnalyticsService` (hosted, a slow timer + an
+  `ISessionMonitoringService.Updated` hook) computes the health score, appends a
+  `BatteryHealthSnapshot`, recomputes the trend, runs the insight provider and
+  replaces the active insight set; also serves `GetStatisticsAsync`.
+- `Data`: `BatteryHealthSnapshotRepository`/`InsightRepository` +
+  `HealthSnapshotStore`/`InsightStore`/`AnalyticsReadStore` (Core seams, same
+  shape as `SessionStore`). `DatabaseMaintenanceService` gained the `SampleHour`
+  and `DailyStatistics` rollup producers (closes R-067) plus minute/hour/daily
+  retention. `HealthSnapshotRowCount`/`InsightRowCount` on the Diagnostics facts.
+- `App`: `StatisticsViewModel` + rebuilt `StatisticsPage` (Today/7d/30d/Lifetime
+  selector, summary tiles, charge-vs-discharge duration bars, screen-on share).
+  `BatteryViewModel` + `BatteryPage` gained the "Battery Health Score" card with a
+  working "How this score is calculated" `Expander`, a "Degradation trend" card
+  and a "Time remaining" card ("Calculating…" then real figures, screen-off
+  honestly Unavailable). `InsightsViewModel` + the Dashboard "Smart Insights"
+  card (qualifying insights or the honest suppressed state); the Dashboard
+  "Battery Health" card shows the real score + trend line. About gained the full
+  `HealthScoreV1` / trend / `ChargingQualityV1` / runtime / insight-gates
+  methodology (spec §55).
+
+**Depends on:** 3, 4, 5, 6, 7.
+
+**Exit criteria:**
+
+| Criterion | Result |
+|---|---|
+| Score renormalises with cycle count and temperature both absent (the reference config) | ✅ `HealthScoreCalculatorTests.CycleCountAndTemperatureBothAbsent_…` (contributing weights sum to 1.0), `AnalyticsServiceTests.FirstPass_…` |
+| No fabricated score — retention absent ⇒ Unavailable | ✅ `HealthScoreCalculatorTests.RetentionAbsent_MakesTheWholeScoreUnavailable` |
+| Insights suppressed below the confidence and effect-size thresholds | ✅ `RuleBasedInsightProviderTests.WithinNoiseVariation_ProducesNoInsights` / `…ConfidenceBelowTheThreshold_Suppresses`; `AnalyticsServiceTests.Insights_AreEmpty_…` |
+| "How this score is calculated" renders real per-factor contributions | ✅ `HealthFactor[]` with raw + normalised weight + basis; rendered in the `Expander` |
+| Degradation trend is not moved by noise | ✅ `DegradationTrendTests.AFlatNoisySeries_…` / `OneOutlierReading_DoesNotSwingTheSlope` (Theil–Sen) |
+| Runtime tiers; screen-off without history ⇒ Unavailable | ✅ `RuntimeEstimatorTests`, `RuntimeEstimationServiceTests.ScreenOff_…` |
+| Statistics window boundaries / DST | ✅ `StatisticsEngineTests` (local-midnight start, midnight-straddling proration, DST day) |
+| `SampleHour` + `DailyStatistics` producers | ✅ `DatabaseMaintenanceServiceTests` (settled-hours only, fully-elapsed-days only, idempotent) |
+| Solution builds, Debug and Release | ✅ 0 errors, 0 warnings |
+| Unit + Simulation + Integration tests | ✅ 264 passing (195 + 30 + 39) |
+
+**Deviations from plan**
+
+- **The degradation trend uses a Theil–Sen median slope**, not the OLS the design
+  implies — the exit criterion is explicitly "noise does not move the trend", and
+  one anomalous full-charge reading otherwise swings an OLS line.
+- **The `StatisticsEngine` computes from `BatterySession` rows directly**, not from
+  the `DailyStatistics` tier. Sessions are never pruned (retention removes
+  `BatterySample` rows, not sessions), so this is exact and needs no tier. The
+  `SampleHour` + `DailyStatistics` producers still ship (closing R-067) — Phase 11
+  (History) consumes them.
+- **`DailyStatistics` temperature and end-of-day-health columns are left null** for
+  now — the reference machine has no temperature sensor, and the stats engine does
+  not need them. A later pass fills them for History.
+- **Charging quality is computed but has no dedicated card yet** — `ChargingQualityScorer`
+  ships and is unit-tested; it currently feeds understanding of the "rate
+  stability" health factor. A charging-quality UI is later polish.
+- **`RuntimeEstimationService` is a separate hosted service**, not folded into
+  `PowerMonitoringService`, so the §3 model stays isolated and Power keeps one
+  responsibility. Its "comparable historical periods" input is approximated from
+  the in-window sample count (no cross-session store on the live path).
+- **The Statistics window selector is Today / 7d / 30d / Lifetime** — a custom
+  date range shares the engine (`StatisticsWindow.Custom` + `DateRange`) but its
+  picker UI lands with Phase 11 (History), which owns range selection.
+- **Insight rule corpus is 7 conservative rules.** Data-shaped and extensible;
+  spec §77 ("never unsafe") and §18 ("suppressed if none qualify") favour a small
+  credible set over breadth.
+- **No `V002` migration** — every table used exists verbatim from `V001`.
 
 ---
 
