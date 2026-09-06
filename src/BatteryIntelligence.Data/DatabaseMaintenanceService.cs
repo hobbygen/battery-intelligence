@@ -384,6 +384,18 @@ public sealed class DatabaseMaintenanceService : IHostedService, IDisposable
                     await deleteDaily.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 }
 
+                int alertsDeleted;
+                await using (SqliteCommand deleteAlerts = connection.CreateCommand())
+                {
+                    // Alert history has a bound too (docs/roadmap.md Phase 9): rows
+                    // older than AlertRetentionDays are dropped, acknowledged or not.
+                    long alertCutoff = DateTimeOffset.UtcNow.AddDays(-data.AlertRetentionDays).ToUnixTimeMilliseconds();
+                    deleteAlerts.Transaction = transaction;
+                    deleteAlerts.CommandText = "DELETE FROM Alert WHERE TimestampUtc < $cutoff;";
+                    deleteAlerts.Parameters.AddWithValue("$cutoff", alertCutoff);
+                    alertsDeleted = await deleteAlerts.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                }
+
                 await using (SqliteCommand upsertSettings = connection.CreateCommand())
                 {
                     upsertSettings.Transaction = transaction;
@@ -407,11 +419,11 @@ public sealed class DatabaseMaintenanceService : IHostedService, IDisposable
 
                 await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
-                if (deleted > 0 || powerDeleted > 0 || temperatureDeleted > 0 || processDeleted > 0)
+                if (deleted > 0 || powerDeleted > 0 || temperatureDeleted > 0 || processDeleted > 0 || alertsDeleted > 0)
                 {
                     _logger.LogInformation(
-                        "Retention removed {BatteryCount} battery, {PowerCount} power, {TempCount} temperature and {ProcessCount} process sample row(s) older than {Days} day(s).",
-                        deleted, powerDeleted, temperatureDeleted, processDeleted, data.RawRetentionDays);
+                        "Retention removed {BatteryCount} battery, {PowerCount} power, {TempCount} temperature, {ProcessCount} process and {AlertCount} alert row(s).",
+                        deleted, powerDeleted, temperatureDeleted, processDeleted, alertsDeleted);
                 }
             }
             catch

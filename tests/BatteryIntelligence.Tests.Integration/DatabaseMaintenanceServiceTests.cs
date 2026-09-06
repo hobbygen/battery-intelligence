@@ -287,6 +287,33 @@ public sealed class DatabaseMaintenanceServiceTests
     }
 
     [Fact]
+    public async Task RunRetentionAsync_DropsAlertsPastTheAlertRetentionWindow()
+    {
+        using TempDatabase db = new();
+        await db.MigrateAsync();
+
+        long oldTs = DateTimeOffset.UtcNow.AddDays(-120).ToUnixTimeMilliseconds();
+        long recentTs = DateTimeOffset.UtcNow.AddDays(-3).ToUnixTimeMilliseconds();
+        await db.ExecuteAsync(
+            "INSERT INTO Alert (TimestampUtc, AlertType, Severity, Title, Message, Acknowledged) VALUES ($ts, 1, 1, 'Old', 'm', 1);",
+            ("$ts", oldTs));
+        await db.ExecuteAsync(
+            "INSERT INTO Alert (TimestampUtc, AlertType, Severity, Title, Message, Acknowledged) VALUES ($ts, 1, 1, 'Recent', 'm', 0);",
+            ("$ts", recentTs));
+
+        AppSettings settings = new();
+        settings.Data.AlertRetentionDays = 90;
+        DatabaseMaintenanceService service = CreateService(db, settings);
+
+        await service.RunRetentionAsync(CancellationToken.None);
+
+        long count = await db.ScalarAsync<long>("SELECT COUNT(*) FROM Alert;");
+        string kept = await db.ScalarAsync<string>("SELECT Title FROM Alert;");
+        Assert.Equal(1, count);
+        Assert.Equal("Recent", kept);
+    }
+
+    [Fact]
     public async Task RunRetentionAsync_RecordsLastCleanupUtc()
     {
         using TempDatabase db = new();

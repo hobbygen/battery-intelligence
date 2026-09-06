@@ -68,6 +68,7 @@ public sealed class DatabaseDiagnosticsProvider : IDatabaseDiagnosticsProvider
         long processSampleCount = 0;
         long healthSnapshotCount = 0;
         long insightCount = 0;
+        long alertCount = 0;
         DateTimeOffset? lastCleanup = null;
 
         try
@@ -110,6 +111,12 @@ public sealed class DatabaseDiagnosticsProvider : IDatabaseDiagnosticsProvider
                 insightCount = (long)(await insightCountCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) ?? 0L);
             }
 
+            await using (SqliteCommand alertCountCommand = connection.CreateCommand())
+            {
+                alertCountCommand.CommandText = "SELECT COUNT(*) FROM Alert;";
+                alertCount = (long)(await alertCountCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) ?? 0L);
+            }
+
             await using (SqliteCommand cleanupCommand = connection.CreateCommand())
             {
                 cleanupCommand.CommandText = "SELECT LastCleanupUtc FROM DataRetentionSettings WHERE Id = 1;";
@@ -139,7 +146,8 @@ public sealed class DatabaseDiagnosticsProvider : IDatabaseDiagnosticsProvider
             TemperatureSampleRowCount: temperatureSampleCount,
             ProcessSampleRowCount: processSampleCount,
             HealthSnapshotRowCount: healthSnapshotCount,
-            InsightRowCount: insightCount);
+            InsightRowCount: insightCount,
+            AlertRowCount: alertCount);
     }
 
     private static DateTimeOffset? Later(DateTimeOffset? a, DateTimeOffset? b)

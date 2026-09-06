@@ -4,6 +4,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:BatteryIntelligence.App.Controls"
+    xmlns:vm="using:BatteryIntelligence.App.ViewModels"
     xmlns:tb="using:H.NotifyIcon"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -90,13 +91,64 @@
                     Background="Transparent"
                     BorderThickness="0"
                     AutomationProperties.Name="Alerts">
-                    <FontIcon FontSize="16" Glyph="&#xEA8F;" />
+                    <Grid>
+                        <FontIcon FontSize="16" Glyph="&#xEA8F;" />
+                        <Border
+                            HorizontalAlignment="Right" VerticalAlignment="Top"
+                            Margin="0,-3,-4,0"
+                            MinWidth="15" Height="15"
+                            CornerRadius="8"
+                            Padding="3,0"
+                            Background="{ThemeResource AppCritBrush}"
+                            Visibility="{x:Bind ViewModel.HasAlerts, Mode=OneWay}">
+                            <TextBlock
+                                HorizontalAlignment="Center" VerticalAlignment="Center"
+                                FontSize="9.5" FontWeight="Bold" Foreground="White"
+                                Text="{x:Bind ViewModel.AlertCountText, Mode=OneWay}" />
+                        </Border>
+                    </Grid>
                     <Button.Flyout>
                         <Flyout>
-                            <controls:EmptyStateView
-                                Glyph="&#xEA8F;"
-                                Title="No alerts yet"
-                                Description="The alert engine, notification delivery and alert history arrive in Phase 9. Until then this centre stays empty rather than showing sample entries." />
+                            <StackPanel Width="320" Spacing="10">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Style="{StaticResource CardKickerTextStyle}" Text="RECENT ALERTS" />
+                                    <HyperlinkButton Grid.Column="1" Padding="0" Content="Acknowledge all"
+                                                     Visibility="{x:Bind ViewModel.HasAlerts, Mode=OneWay}"
+                                                     Command="{x:Bind ViewModel.AcknowledgeAllCommand}" />
+                                </Grid>
+
+                                <TextBlock
+                                    Visibility="{x:Bind ViewModel.NoRecentAlerts, Mode=OneWay}"
+                                    Foreground="{ThemeResource AppText2Brush}"
+                                    TextWrapping="Wrap"
+                                    Text="No alerts. They fire only when a reading crosses a threshold you set." />
+
+                                <ItemsControl Visibility="{x:Bind ViewModel.HasRecentAlerts, Mode=OneWay}" ItemsSource="{x:Bind ViewModel.RecentAlerts, Mode=OneWay}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:AlertDisplayRow">
+                                            <Grid Padding="0,7" ColumnSpacing="10" BorderBrush="{ThemeResource AppLine2Brush}" BorderThickness="0,0,0,1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <FontIcon Grid.Column="0" VerticalAlignment="Top" FontSize="14" Foreground="{ThemeResource AppText2Brush}" Glyph="{x:Bind SeverityGlyph}" />
+                                                <StackPanel Grid.Column="1" Spacing="2">
+                                                    <TextBlock FontSize="13" FontWeight="SemiBold" Text="{x:Bind Title}" />
+                                                    <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="{x:Bind Message}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2" VerticalAlignment="Top" Style="{StaticResource MetricLabelTextStyle}" Text="{x:Bind When}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <HyperlinkButton HorizontalAlignment="Left" Padding="0" Content="View all alerts →" Command="{x:Bind ViewModel.OpenAlertsCommand}" />
+                            </StackPanel>
                         </Flyout>
                     </Button.Flyout>
                 </Button>

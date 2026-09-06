@@ -270,6 +270,9 @@ public sealed class DataSettings
     /// <summary>Daily aggregate retention in days; zero means keep indefinitely.</summary>
     public int DailyRetentionDays { get; set; }
 
+    /// <summary>Alert history retention in days. Kept longer than raw telemetry — it is history the user comes back to.</summary>
+    public int AlertRetentionDays { get; set; } = 90;
+
     /// <summary>
     /// Override for the database directory. Empty means the default location
     /// under <c>%LocalAppData%</c>.
@@ -282,6 +285,7 @@ public sealed class DataSettings
         MinuteRetentionDays = Math.Clamp(MinuteRetentionDays, 1, 3650);
         HourRetentionDays = Math.Clamp(HourRetentionDays, 1, 3650);
         DailyRetentionDays = Math.Clamp(DailyRetentionDays, 0, 3650);
+        AlertRetentionDays = Math.Clamp(AlertRetentionDays, 7, 3650);
 
         // Each tier must retain at least as long as the one below it, or data
         // would be discarded before it has been rolled up. See docs/database.md.

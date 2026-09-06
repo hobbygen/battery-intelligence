@@ -43,6 +43,7 @@
     <ProjectReference Include="..\..\src\BatteryIntelligence.Thermal\BatteryIntelligence.Thermal.csproj" />
     <ProjectReference Include="..\..\src\BatteryIntelligence.ProcessMonitoring\BatteryIntelligence.ProcessMonitoring.csproj" />
     <ProjectReference Include="..\..\src\BatteryIntelligence.Analytics\BatteryIntelligence.Analytics.csproj" />
+    <ProjectReference Include="..\..\src\BatteryIntelligence.Notifications\BatteryIntelligence.Notifications.csproj" />
   </ItemGroup>
 
 </Project>

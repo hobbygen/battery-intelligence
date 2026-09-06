@@ -722,15 +722,82 @@ view models. `BatteryHealthSnapshot`, `Insight`, `SampleHour` and
 
 ---
 
-## Phase 9 — Alerts
+## Phase 9 — Alerts (complete)
 
-**Deliverables:** alert engine with thresholds, hysteresis and cooldown; Windows
-notifications with in-app fallback; alert history; per-alert configuration; Alerts
-page.
+The bridge between "the app knows something is wrong" and "the user finds out".
+Built like Phases 5–8: a pure engine in `Core.Alerts`, a promoted
+infrastructure-sibling orchestrator, a Data store behind a Core seam, coalesced
+view models. `AlertSettings`, `NotificationSettings` and the `Alert` table all
+existed from earlier phases — **no migration**.
 
-**Depends on:** 2, 3, 8. **Exit:** no duplicate or storming notifications; every
-default alert from spec §20 configurable; notification failure degrades to in-app
-without error.
+**What shipped:**
+
+- `Core.Alerts.AlertRuleEngine` (pure, stateful, clock-injected): one rule per
+  `AlertType` (low / critical / fully-charged / high-temperature / rapid-discharge
+  / slow-charging / charger-connected / charger-disconnected / health-degradation
+  / high-app-consumption — spec §20). Each threshold rule has **hysteresis** (fires
+  on the entering edge, re-arms only after recovering past a margin) and a
+  **cooldown** (a type cannot re-fire within `CooldownMinutes`; health-degradation
+  gets 24 h). Charger events are edge-triggered off the AC line. `Evaluate` returns
+  only the alerts that fire *this* tick. New `Alert` / `AlertEvaluationInput`
+  models, `AlertType` / `AlertSeverity` enums.
+- Core interfaces `INotificationPresenter`, `IAlertMonitoringService`,
+  `IAlertStore`; `DataSettings.AlertRetentionDays` (90, clamped 7–3650).
+- `Notifications` project: **promoted from the `ModuleMarker` stub**, stays plain
+  `net10.0` — the engine and orchestrator are pure logic over Core interfaces.
+  `AlertMonitoringService` (hosted) rides the battery, analytics and process
+  monitors (debounced), builds the input (percentage, state, AC, temperature,
+  discharge/charge rate + 7-day baselines, health score, degradation slope, top
+  app share), runs the engine, persists every fired alert (priority write),
+  always raises it in the in-app centre, then asks the presenter for a toast —
+  a toast failure logs at Debug and is otherwise silent. The engine is timed off
+  the reading's timestamp, not wall-clock, so the orchestrator is deterministic
+  under test.
+- `Data`: `AlertRepository` + `AlertStore` (insert, recent, unacked count,
+  acknowledge one/all); `DatabaseMaintenanceService` drops `Alert` rows past
+  `AlertRetentionDays`; `AlertRowCount` on the Diagnostics facts.
+- `App`: `WindowsToastPresenter` (`INotificationPresenter`) —
+  `AppNotificationManager` for this unpackaged app, `Register()` at startup and
+  every `Show` fully wrapped; on failure `IsAvailable` stays false and the alert
+  is in-app only. Rebuilt `AlertsPage` (active list, per-alert rules with
+  toggles + sliders, delivery toggles, history) using a new `ToggleRow` control.
+  `ShellViewModel.AlertCount` is the real unacknowledged count; the title-bar
+  bell gained a badge and a recent-alerts flyout with "Acknowledge all" and
+  "View all". Diagnostics shows the alert row count and the notification-channel
+  status.
+
+**Depends on:** 2, 3, 8.
+
+**Exit criteria:**
+
+| Criterion | Result |
+|---|---|
+| No duplicate or storming alerts | ✅ `AlertRuleEngineTests` (fires once crossing down; never re-fires while below; re-arms only past the margin; cooldown blocks a repeat even after a re-arm), `AlertMonitoringServiceTests` (oscillation around the line → still one alert) |
+| Every default alert from spec §20 configurable | ✅ one `AlertType` + one `AlertsPage` toggle per `AlertSettings` field; `AlertRuleEngineTests.ADisabledAlert_NeverFires` |
+| Notification failure degrades to in-app without error | ✅ `AlertMonitoringServiceTests.ANotificationFailure_DegradesToInApp_WithoutError` (presenter throws → alert still persisted, counted, `LastError` null); `WindowsToastPresenter` catches everything |
+| Critical wins over low; charger edges; temperature hysteresis; health-degradation only when confident | ✅ dedicated `AlertRuleEngineTests` |
+| Alert history + retention | ✅ `AlertStoreTests`, `DatabaseMaintenanceServiceTests.RunRetentionAsync_DropsAlertsPastTheAlertRetentionWindow` |
+| Solution builds, Debug and Release | ✅ 0 errors, 0 warnings |
+| Unit + Simulation + Integration tests | ✅ 281 passing (205 + 33 + 43) |
+
+**Deviations from plan**
+
+- **The Notifications project is plain `net10.0`, not `net10.0-windows`.** The
+  alert engine and orchestrator are pure; the one Windows API
+  (`AppNotificationManager`) lives in `WindowsToastPresenter` in the App project
+  behind the `INotificationPresenter` seam — so the whole engine is
+  unit-testable and Notifications stays an infra sibling.
+- **`RapidDischarge` / `SlowCharging` ship as engine rules but stay off by
+  default** (matching `AlertSettings`); they compare the live rate against the
+  7-day baseline from `IAnalyticsService.GetStatisticsAsync`, so they only do
+  anything once a week of history exists.
+- **`HighApplicationConsumption` fires on the top app's estimated share**, not an
+  absolute wattage, and only while on battery (per-app absolute power is
+  Unavailable on AC — Phase 7).
+- **The engine is timed off the battery reading's timestamp**, not wall-clock, so
+  cooldown/hysteresis are testable with a scripted timeline. In production the
+  two are identical to the millisecond.
+- **No `V002` migration** — the `Alert` table exists verbatim from `V001`.
 
 ---
 

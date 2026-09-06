@@ -61,6 +61,20 @@ public sealed class SettingsValidationTests
     }
 
     [Fact]
+    public void AlertRetention_IsClampedAndKeptWellAboveRawTelemetry()
+    {
+        AppSettings settings = new();
+        settings.Data.AlertRetentionDays = 1;
+        settings.Validate();
+        Assert.InRange(settings.Data.AlertRetentionDays, 7, 3650);
+
+        AppSettings big = new();
+        big.Data.AlertRetentionDays = 99999;
+        big.Validate();
+        Assert.Equal(3650, big.Data.AlertRetentionDays);
+    }
+
+    [Fact]
     public void AnalyticsThresholds_AreClampedToSaneRanges()
     {
         AppSettings settings = new();

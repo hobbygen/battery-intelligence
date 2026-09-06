@@ -15,6 +15,7 @@ namespace BatteryIntelligence.Core.Models;
 /// <param name="ProcessSampleRowCount">Row count in <c>ProcessSample</c>.</param>
 /// <param name="HealthSnapshotRowCount">Row count in <c>BatteryHealthSnapshot</c>.</param>
 /// <param name="InsightRowCount">Active (non-dismissed) row count in <c>Insight</c>.</param>
+/// <param name="AlertRowCount">Row count in <c>Alert</c>.</param>
 public sealed record DatabaseDiagnostics(
     bool Exists,
     string Path,
@@ -27,4 +28,5 @@ public sealed record DatabaseDiagnostics(
     long TemperatureSampleRowCount = 0,
     long ProcessSampleRowCount = 0,
     long HealthSnapshotRowCount = 0,
-    long InsightRowCount = 0);
+    long InsightRowCount = 0,
+    long AlertRowCount = 0);

@@ -1,6 +1,6 @@
 # Requirements Traceability Matrix
 
-Status: updated after Phase 8. Version 1.0.0.
+Status: updated after Phase 9. Version 1.0.0.
 
 Covers spec §70: requirement → module → implementation → test → status.
 
@@ -56,7 +56,7 @@ Covers spec §70: requirement → module → implementation → test → status.
 | R-036 | Battery temperature, or honest absence | §14 | Thermal | `ThermalMonitoringService` reads `BatteryInfo.TemperatureCelsius` (already resolved S4→S3); on the reference machine the sensor is absent, `SensorAvailable` is false, the page renders the unavailable state and never substitutes CPU temp | `ThermalMonitoringServiceTests` (sensor present + absent), `TemperatureBandClassifierTests`; live: reference machine renders "Sensor unavailable" with the §14 wording, nothing persisted | ✅ |
 | R-036b | Per-band time breakdown + threshold events | §14 | Thermal | `TemperatureBandClassifier` (fixed 30/40/45 °C); `ThresholdEventDetector` (60 s dwell gate) | `ThresholdEventDetectorTests`, `ThermalMonitoringServiceTests.Ingest_RisingTemperature*` | ✅ |
 | R-036c | `TemperatureSample` pipeline + retention | §14, §31 | Data | `TemperatureSampleWriteQueue` (deci-Kelvin, 200/30 s/flush, 1000 cap), raw-only age-cutoff retention | `TemperatureSampleWriteQueueTests` (deci-Kelvin, count trigger, unavailable persists nothing) | ✅ |
-| R-037 | Configurable thermal thresholds | §14 | Core (`AlertSettings.HighTemperatureCelsius`) + Thermal | Warning value drives `TemperatureThresholds` (critical = warn + 7 °C); classifier moves with it | `TemperatureBandClassifierTests.Classify_SeverityShifts_WhenTheThresholdChanges` | ✅ (full alert delivery is Phase 9) |
+| R-037 | Configurable thermal thresholds | §14 | Core (`AlertSettings.HighTemperatureCelsius`) + Thermal + Notifications | Warning value drives `TemperatureThresholds` (critical = warn + 7 °C); the classifier and the `HighTemperature` alert rule both move with it | `TemperatureBandClassifierTests.Classify_SeverityShifts_…`, `AlertRuleEngineTests.HighTemperature_UsesHysteresisAroundTheThreshold` | ✅ |
 
 ## Sessions
 
@@ -110,8 +110,8 @@ Covers spec §70: requirement → module → implementation → test → status.
 | R-083 | Confidence-gated insights | §18 | Core.Analytics | `RuleBasedInsightProvider` — every rule behind 4 gates incl. effect > the metric's own variance | `RuleBasedInsightProviderTests` (within-noise ⇒ zero; genuine effect ⇒ one; confidence below threshold ⇒ suppressed), `AnalyticsServiceTests` | ✅ |
 | R-084 | `IInsightProvider` abstraction | §34 | Core | `IInsightProvider` in Core; `RuleBasedInsightProvider` the default impl; AI provider explicitly out of scope for v1 | `RuleBasedInsightProviderTests` | ✅ |
 | R-085 | Insights never unsafe | §77 | Core.Analytics | Fixed, curated `Title`/`Explanation` strings — only figures substituted; conservative rule corpus (`InsightRulesV1`) | Review of the 7-rule corpus; `RuleBasedInsightProviderTests` | ✅ |
-| R-086 | Configurable alerts + cooldown | §20 | Notifications | Engine with hysteresis | Unit: no storming | 📋 |
-| R-087 | Windows notifications + in-app centre | §21 | Notifications | Toast with in-app fallback | Manual | 📋 |
+| R-086 | Configurable alerts + cooldown | §20 | Core.Alerts + Notifications | `AlertRuleEngine` — per-type hysteresis (fire on the entering edge, re-arm past a margin) + cooldown; one rule per `AlertSettings` toggle; `AlertMonitoringService` drives it from the battery/analytics/process monitors | `AlertRuleEngineTests` (fires once, never re-fires while below, cooldown blocks a repeat, disabled never fires, critical wins), `AlertMonitoringServiceTests` (oscillation → one alert) | ✅ |
+| R-087 | Windows notifications + in-app centre | §21 | App (`WindowsToastPresenter`) + Notifications | `AppNotificationManager` for the unpackaged app, `Register()`/`Show()` fully guarded; the in-app centre (`IAlertMonitoringService` → bell flyout + Alerts page) is the guaranteed floor | `AlertMonitoringServiceTests.ANotificationFailure_DegradesToInApp_WithoutError`; live: reference machine | ✅ |
 | R-088 | Tray, background monitoring | §22 | Windows | `H.NotifyIcon`, close-to-tray | Manual | 📋 |
 | R-089 | Single instance | §59 | App | `AppInstance.FindOrRegisterForKey` + redirection | Verified: second launch redirected | ✅ |
 | R-090 | Start with Windows, configurable | §23 | Windows | Startup task, no admin | Manual across reboot | 📋 |

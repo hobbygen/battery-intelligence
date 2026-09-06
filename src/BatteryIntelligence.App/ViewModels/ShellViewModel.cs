@@ -4,6 +4,7 @@ using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Interfaces;
 using BatteryIntelligence.Core.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Dispatching;
 
 namespace BatteryIntelligence.App.ViewModels;
@@ -17,7 +18,11 @@ public sealed partial class ShellViewModel : ObservableObject
     private readonly ISettingsService _settings;
     private readonly INavigationService _navigation;
     private readonly IBatteryMonitoringService _battery;
+    private readonly IAlertMonitoringService _alerts;
     private readonly DispatcherQueue _dispatcher;
+
+    private int _alertCount;
+    private IReadOnlyList<AlertDisplayRow> _recentAlerts = [];
 
     private bool _isPaneOpen;
     private bool _isBackEnabled;
@@ -32,21 +37,26 @@ public sealed partial class ShellViewModel : ObservableObject
     public ShellViewModel(
         ISettingsService settings,
         INavigationService navigation,
-        IBatteryMonitoringService battery)
+        IBatteryMonitoringService battery,
+        IAlertMonitoringService alerts)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(navigation);
         ArgumentNullException.ThrowIfNull(battery);
+        ArgumentNullException.ThrowIfNull(alerts);
 
         _settings = settings;
         _navigation = navigation;
         _battery = battery;
+        _alerts = alerts;
         _dispatcher = DispatcherQueue.GetForCurrentThread();
         _isPaneOpen = settings.Current.Appearance.NavigationPaneOpen;
 
         _navigation.Navigated += OnNavigated;
         _battery.Updated += OnBatteryUpdated;
+        _alerts.Updated += OnAlertsUpdated;
         ApplyBatteryStatus();
+        ApplyAlerts();
     }
 
     /// <summary>Product name shown in the title bar.</summary>
@@ -82,8 +92,51 @@ public sealed partial class ShellViewModel : ObservableObject
         private set => SetProperty(ref _currentPageTitle, value);
     }
 
-    /// <summary>Unread alert count for the title-bar bell. Zero until Phase 9.</summary>
-    public int AlertCount => 0;
+    /// <summary>Unacknowledged alert count for the title-bar bell badge.</summary>
+    public int AlertCount
+    {
+        get => _alertCount;
+        private set
+        {
+            if (SetProperty(ref _alertCount, value))
+            {
+                OnPropertyChanged(nameof(HasAlerts));
+                OnPropertyChanged(nameof(AlertCountText));
+            }
+        }
+    }
+
+    /// <summary>Whether the bell should show a badge.</summary>
+    public bool HasAlerts => _alertCount > 0;
+
+    /// <summary>Badge text, capped at "9+".</summary>
+    public string AlertCountText => _alertCount > 9 ? "9+" : _alertCount.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>Recent alerts for the bell flyout, newest first.</summary>
+    public IReadOnlyList<AlertDisplayRow> RecentAlerts
+    {
+        get => _recentAlerts;
+        private set
+        {
+            if (SetProperty(ref _recentAlerts, value))
+            {
+                OnPropertyChanged(nameof(HasRecentAlerts));
+                OnPropertyChanged(nameof(NoRecentAlerts));
+            }
+        }
+    }
+
+    public bool HasRecentAlerts => _recentAlerts.Count > 0;
+
+    public bool NoRecentAlerts => _recentAlerts.Count == 0;
+
+    /// <summary>Marks every active alert acknowledged (bell flyout button).</summary>
+    [RelayCommand]
+    private async Task AcknowledgeAllAsync() => await _alerts.AcknowledgeAllAsync().ConfigureAwait(false);
+
+    /// <summary>Opens the Alerts page (bell flyout "View all").</summary>
+    [RelayCommand]
+    private void OpenAlerts() => _navigation.NavigateTo("Alerts");
 
     /// <summary>Whether there is a battery reading to show in the status strip.</summary>
     public bool HasBatteryStatus
@@ -144,6 +197,41 @@ public sealed partial class ShellViewModel : ObservableObject
         _ = sender;
         _ = e;
         _dispatcher.TryEnqueue(ApplyBatteryStatus);
+    }
+
+    private void OnAlertsUpdated(object? sender, EventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        _dispatcher.TryEnqueue(ApplyAlerts);
+    }
+
+    private void ApplyAlerts()
+    {
+        AlertCount = _alerts.UnacknowledgedCount;
+        RecentAlerts =
+        [
+            .. _alerts.RecentAlerts.Take(6).Select(a => new AlertDisplayRow(
+                a.Id ?? 0,
+                a.Title,
+                a.Message,
+                a.Severity switch { AlertSeverity.Critical => "", AlertSeverity.Warning => "", _ => "" },
+                a.Severity switch { AlertSeverity.Critical => "AppCritBrush", AlertSeverity.Warning => "AppWarnBrush", _ => "AppAccentBrush" },
+                DescribeAlertAge(a.TimestampUtc),
+                a.Acknowledged)),
+        ];
+    }
+
+    private static string DescribeAlertAge(DateTimeOffset timestamp)
+    {
+        TimeSpan elapsed = DateTimeOffset.UtcNow - timestamp;
+        return elapsed switch
+        {
+            { TotalMinutes: < 1 } => "Just now",
+            { TotalMinutes: < 60 } => string.Create(CultureInfo.InvariantCulture, $"{(int)elapsed.TotalMinutes}m ago"),
+            { TotalHours: < 24 } => string.Create(CultureInfo.InvariantCulture, $"{(int)elapsed.TotalHours}h ago"),
+            _ => timestamp.ToLocalTime().ToString("d MMM", CultureInfo.InvariantCulture),
+        };
     }
 
     private void ApplyBatteryStatus()

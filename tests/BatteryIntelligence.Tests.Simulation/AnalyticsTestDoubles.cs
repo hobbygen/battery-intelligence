@@ -31,6 +31,19 @@ internal sealed class AnalyticsFakeBattery : IBatteryMonitoringService
 
     public Task RefreshAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
+    /// <summary>Push a reading with an explicit state / percentage / AC line — for the alert tests.</summary>
+    public void PushState(DateTimeOffset ts, BatteryState state, double percent, bool ac, int powerMw = -9_000)
+    {
+        BatteryInfo info = Discharging(ts, powerMw, (int)Math.Round(percent * 950.08)) with
+        {
+            State = Measurement<BatteryState>.Measured(state, MeasurementSource.WinRtBattery),
+            AcOnline = Measurement<bool>.Measured(ac, MeasurementSource.SystemPowerStatus),
+            Percentage = Measurement<double>.Measured(percent, MeasurementSource.WinRtBattery),
+            PowerMw = Measurement<int>.Measured(state == BatteryState.Charging ? Math.Abs(powerMw) : -Math.Abs(powerMw), MeasurementSource.WinRtBattery),
+        };
+        Push(info);
+    }
+
     public static BatteryInfo Discharging(DateTimeOffset ts, int powerMw, int remainingMwh, int? cycleCount = null, double retention = 82.0) => new()
     {
         BatteryId = "battery0",
@@ -161,5 +174,119 @@ internal sealed class FakeRuntimeEstimationService : IRuntimeEstimationService
     {
         add { }
         remove { }
+    }
+}
+
+internal sealed class FakeAnalyticsService : IAnalyticsService
+{
+    public HealthScore CurrentHealth { get; set; } =
+        HealthScore.Unavailable("HealthScoreV1", DateTimeOffset.UtcNow, []);
+
+    public DegradationTrend Trend { get; set; } =
+        DegradationTrend.NotEnoughData(0, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+
+    public IReadOnlyList<AnalyticsInsight> Insights => [];
+
+    public string? LastError => null;
+
+    public StatisticsSummary WeekSummary { get; set; } =
+        StatisticsSummary.Empty(Core.Enums.StatisticsWindow.Last7Days, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+
+    public event EventHandler? Updated;
+
+    public void RaiseUpdated() => Updated?.Invoke(this, EventArgs.Empty);
+
+    public Task<StatisticsSummary> GetStatisticsAsync(
+        Core.Enums.StatisticsWindow window, DateRange? range = null, CancellationToken cancellationToken = default) =>
+        Task.FromResult(WeekSummary);
+
+    public Task<IReadOnlyList<RetentionPoint>> GetRetentionHistoryAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<RetentionPoint>>([]);
+
+    public Task RefreshAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+}
+
+internal sealed class FakeProcessMonitoring : IProcessMonitoringService
+{
+    public AppEnergyAttribution CurrentAttribution { get; set; } =
+        AppEnergyAttribution.Empty("AppEnergyV1", DateTimeOffset.UtcNow);
+
+    public bool AbsoluteAvailable => CurrentAttribution.AbsoluteAvailable;
+
+    public string EstimatorVersion => "AppEnergyV1";
+
+    public string? LastError => null;
+
+    public event EventHandler? Updated;
+
+    public void RaiseUpdated() => Updated?.Invoke(this, EventArgs.Empty);
+
+    public AppEnergyAttribution GetRanking(Core.Enums.ProcessWindow window) => CurrentAttribution;
+
+    public Task RefreshAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+}
+
+internal sealed class FakeAlertStore : IAlertStore
+{
+    public List<Alert> Rows { get; } = [];
+
+    private long _nextId = 1;
+
+    public Task<long> InsertAsync(Alert alert, CancellationToken cancellationToken = default)
+    {
+        long id = _nextId++;
+        Rows.Insert(0, alert with { Id = id });
+        return Task.FromResult(id);
+    }
+
+    public Task<IReadOnlyList<Alert>> GetRecentAsync(int count, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Alert>>([.. Rows.Take(count)]);
+
+    public Task<int> GetUnacknowledgedCountAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(Rows.Count(a => !a.Acknowledged));
+
+    public Task AcknowledgeAsync(long alertId, CancellationToken cancellationToken = default)
+    {
+        for (int i = 0; i < Rows.Count; i++)
+        {
+            if (Rows[i].Id == alertId)
+            {
+                Rows[i] = Rows[i] with { Acknowledged = true };
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task AcknowledgeAllAsync(CancellationToken cancellationToken = default)
+    {
+        for (int i = 0; i < Rows.Count; i++)
+        {
+            Rows[i] = Rows[i] with { Acknowledged = true };
+        }
+
+        return Task.CompletedTask;
+    }
+}
+
+internal sealed class FakePresenter : INotificationPresenter
+{
+    public bool IsAvailable { get; set; } = true;
+
+    public bool ThrowOnShow { get; set; }
+
+    public bool ReturnFalse { get; set; }
+
+    public int ShowCount { get; private set; }
+
+    public Task<bool> ShowAsync(Alert alert, bool playSound, CancellationToken cancellationToken = default)
+    {
+        ShowCount++;
+        if (ThrowOnShow)
+        {
+            throw new InvalidOperationException("simulated toast failure");
+        }
+
+        return Task.FromResult(!ReturnFalse);
     }
 }

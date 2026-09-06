@@ -4,11 +4,35 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:BatteryIntelligence.App.Controls"
+    xmlns:vm="using:BatteryIntelligence.App.ViewModels"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <Grid Margin="{StaticResource PageContentMargin}">
+    <Page.Resources>
+        <DataTemplate x:Key="AlertRowTemplate" x:DataType="vm:AlertDisplayRow">
+            <Grid Padding="2,11" ColumnSpacing="12" BorderBrush="{ThemeResource AppLine2Brush}" BorderThickness="0,0,0,1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <FontIcon Grid.Column="0" VerticalAlignment="Top" FontSize="16" Foreground="{ThemeResource AppText2Brush}" Glyph="{x:Bind SeverityGlyph}" />
+                <StackPanel Grid.Column="1" Spacing="3">
+                    <TextBlock FontSize="13.5" FontWeight="SemiBold" Text="{x:Bind Title}" />
+                    <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="{x:Bind Message}" TextWrapping="Wrap" />
+                </StackPanel>
+                <TextBlock Grid.Column="2" VerticalAlignment="Top" Style="{StaticResource MetricLabelTextStyle}" Text="{x:Bind When}" />
+                <Button Grid.Column="3" VerticalAlignment="Top" Padding="8,2" Content="Dismiss"
+                        Visibility="{x:Bind NotAcknowledged}"
+                        Command="{Binding DataContext.AcknowledgeCommand, ElementName=PageRoot}"
+                        CommandParameter="{x:Bind Id}" />
+            </Grid>
+        </DataTemplate>
+    </Page.Resources>
+
+    <Grid x:Name="PageRoot" Margin="{StaticResource PageContentMargin}" DataContext="{x:Bind ViewModel}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -16,15 +40,110 @@
 
         <StackPanel Grid.Row="0">
             <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="Alerts" />
-            <TextBlock Style="{StaticResource PageSubtitleTextStyle}" Text="Alert rules, active alerts and alert history." />
+            <TextBlock Style="{StaticResource PageSubtitleTextStyle}" Text="{x:Bind ViewModel.NotificationChannel, Mode=OneWay}" />
         </StackPanel>
 
-        <controls:EmptyStateView
-            Grid.Row="1"
-            VerticalAlignment="Top"
-            Glyph="&#xE7E7;"
-            Title="No alert engine yet"
-            Description="The alert engine — configurable thresholds with hysteresis and cooldown, Windows notifications with an in-app fallback, and alert history — is built in Phase 9. The title-bar bell opens the same empty centre until then." />
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Auto">
+            <StackPanel MaxWidth="1000" HorizontalAlignment="Left" Spacing="20">
+
+                <!-- Active -->
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <controls:CardHeader Grid.Column="0" Glyph="&#xEA8F;" Text="ACTIVE" />
+                            <Button Grid.Column="1" Padding="10,3" Content="Acknowledge all"
+                                    Visibility="{x:Bind ViewModel.HasActive, Mode=OneWay}"
+                                    Command="{x:Bind ViewModel.AcknowledgeAllCommand}" />
+                        </Grid>
+                        <TextBlock
+                            Visibility="{x:Bind ViewModel.NoActive, Mode=OneWay}"
+                            Foreground="{ThemeResource AppText2Brush}"
+                            TextWrapping="Wrap"
+                            Text="Nothing needs your attention. Alerts fire only when a reading crosses a threshold you set, with hysteresis and a cooldown so a value hovering at the line cannot storm." />
+                        <ItemsControl
+                            Visibility="{x:Bind ViewModel.HasActive, Mode=OneWay}"
+                            ItemsSource="{x:Bind ViewModel.Active, Mode=OneWay}"
+                            ItemTemplate="{StaticResource AlertRowTemplate}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Rules -->
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="6">
+                        <controls:CardHeader Glyph="&#xE713;" Text="ALERT RULES" />
+
+                        <controls:ToggleRow Header="Low battery" Description="Warn while discharging at or below this level."
+                                            IsOn="{x:Bind ViewModel.LowBatteryEnabled, Mode=TwoWay}" />
+                        <Slider Header="Low battery threshold" Minimum="5" Maximum="50" TickFrequency="5" Margin="0,0,0,6"
+                                Value="{x:Bind ViewModel.LowBatteryPercent, Mode=TwoWay}" />
+
+                        <controls:ToggleRow Header="Critical battery" Description="An urgent warning near shutdown."
+                                            IsOn="{x:Bind ViewModel.CriticalBatteryEnabled, Mode=TwoWay}" />
+                        <Slider Header="Critical battery threshold" Minimum="3" Maximum="25" TickFrequency="1" Margin="0,0,0,6"
+                                Value="{x:Bind ViewModel.CriticalBatteryPercent, Mode=TwoWay}" />
+
+                        <controls:ToggleRow Header="Fully charged" Description="Notify when the battery reaches full."
+                                            IsOn="{x:Bind ViewModel.FullyChargedEnabled, Mode=TwoWay}" />
+
+                        <controls:ToggleRow Header="High temperature" Description="Only where the hardware exposes a battery sensor."
+                                            IsOn="{x:Bind ViewModel.HighTemperatureEnabled, Mode=TwoWay}" />
+                        <Slider Header="High temperature threshold (°C)" Minimum="35" Maximum="60" TickFrequency="1" Margin="0,0,0,6"
+                                Value="{x:Bind ViewModel.HighTemperatureCelsius, Mode=TwoWay}" />
+
+                        <controls:ToggleRow Header="Capacity trending down" Description="When the 90-day degradation trend confirms a decline."
+                                            IsOn="{x:Bind ViewModel.HealthDegradationEnabled, Mode=TwoWay}" />
+
+                        <controls:ToggleRow Header="Rapid discharge" Description="Draining well above your recent average (needs history)."
+                                            IsOn="{x:Bind ViewModel.RapidDischargeEnabled, Mode=TwoWay}" />
+                        <controls:ToggleRow Header="Slow charging" Description="Charging well below your recent average (needs history)."
+                                            IsOn="{x:Bind ViewModel.SlowChargingEnabled, Mode=TwoWay}" />
+                        <controls:ToggleRow Header="High app consumption" Description="One application taking an outsized share of the estimated draw."
+                                            IsOn="{x:Bind ViewModel.HighApplicationConsumptionEnabled, Mode=TwoWay}" />
+                        <controls:ToggleRow Header="Charger connected" Description="Notify each time AC power is connected."
+                                            IsOn="{x:Bind ViewModel.ChargerConnectedEnabled, Mode=TwoWay}" />
+                        <controls:ToggleRow Header="Charger disconnected" Description="Notify each time AC power is disconnected."
+                                            IsOn="{x:Bind ViewModel.ChargerDisconnectedEnabled, Mode=TwoWay}" />
+
+                        <Slider Header="Cooldown between repeat alerts (minutes)" Minimum="1" Maximum="120" TickFrequency="5" Margin="0,8,0,0"
+                                Value="{x:Bind ViewModel.CooldownMinutes, Mode=TwoWay}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Delivery -->
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="6">
+                        <controls:CardHeader Glyph="&#xE91C;" Text="DELIVERY" />
+                        <controls:ToggleRow Header="Alerts enabled" Description="The master switch for all alert delivery."
+                                            IsOn="{x:Bind ViewModel.NotificationsEnabled, Mode=TwoWay}" />
+                        <controls:ToggleRow Header="Windows notifications" Description="Show a system toast. Falls back to the in-app centre if unavailable."
+                                            IsOn="{x:Bind ViewModel.UseWindowsNotifications, Mode=TwoWay}" />
+                        <controls:ToggleRow Header="Play a sound" Description="Only affects the Windows notification."
+                                            IsOn="{x:Bind ViewModel.PlaySound, Mode=TwoWay}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- History -->
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="12">
+                        <controls:CardHeader Glyph="&#xE81C;" Text="HISTORY" />
+                        <TextBlock
+                            Visibility="{x:Bind ViewModel.NoHistory, Mode=OneWay}"
+                            Foreground="{ThemeResource AppText2Brush}"
+                            TextWrapping="Wrap"
+                            Text="No alerts have fired yet." />
+                        <ItemsControl
+                            Visibility="{x:Bind ViewModel.HasHistory, Mode=OneWay}"
+                            ItemsSource="{x:Bind ViewModel.History, Mode=OneWay}"
+                            ItemTemplate="{StaticResource AlertRowTemplate}" />
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
     </Grid>
 
 </Page>

@@ -154,6 +154,24 @@ QueryFullProcessImageName
 CPU percent is computed from **cumulative time deltas**, never by sampling in a
 loop. See `monitoring-dataflow.md` §5.
 
+### Notification delivery (S9)
+
+```
+Microsoft.Windows.AppNotifications.AppNotificationManager.Default.Register() / .Show()
+Microsoft.Windows.AppNotifications.Builder.AppNotificationBuilder
+```
+
+This is an **unpackaged** app, so `Register()` creates the Start-menu shortcut and
+COM activator the platform needs before a toast can display. Every call —
+`Register`, `Show`, `Unregister` — is wrapped: on a locked-down box, a group
+policy, or a broken shell the presenter reports itself unavailable and returns
+`false` rather than throwing (spec §21 requires a notification failure to degrade
+to in-app without error). The **in-app alert centre** (`IAlertMonitoringService`
+→ the title-bar bell flyout and the Alerts page) is the guaranteed floor: the
+alert engine persists and raises every alert regardless of whether a toast was
+shown. Confined to `WindowsToastPresenter` in the App project — the Notifications
+project itself is pure `net10.0`.
+
 ---
 
 ## 3. APIs deliberately rejected

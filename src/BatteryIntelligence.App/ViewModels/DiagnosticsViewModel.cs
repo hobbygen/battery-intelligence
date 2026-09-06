@@ -40,6 +40,7 @@ public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
     private readonly ILogger<DiagnosticsViewModel> _logger;
     private readonly IBatteryMonitoringService _monitoring;
     private readonly IDatabaseDiagnosticsProvider _databaseDiagnostics;
+    private readonly IAlertMonitoringService _alerts;
     private readonly DispatcherQueue _dispatcher;
     private readonly IReadOnlyList<DiagnosticSection> _staticSections;
     private IReadOnlyList<DiagnosticSection> _sections;
@@ -48,15 +49,18 @@ public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
     public DiagnosticsViewModel(
         ILogger<DiagnosticsViewModel> logger,
         IBatteryMonitoringService monitoring,
-        IDatabaseDiagnosticsProvider databaseDiagnostics)
+        IDatabaseDiagnosticsProvider databaseDiagnostics,
+        IAlertMonitoringService alerts)
     {
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(monitoring);
         ArgumentNullException.ThrowIfNull(databaseDiagnostics);
+        ArgumentNullException.ThrowIfNull(alerts);
 
         _logger = logger;
         _monitoring = monitoring;
         _databaseDiagnostics = databaseDiagnostics;
+        _alerts = alerts;
         _dispatcher = DispatcherQueue.GetForCurrentThread();
         _staticSections = BuildSections();
         _sections = _staticSections;
@@ -96,6 +100,16 @@ public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
         [
             .. _staticSections,
             BuildStorageSection(database),
+            new DiagnosticSection("Alerts", [
+                new DiagnosticEntry(
+                    "Windows notifications",
+                    _alerts.NotificationsAvailable ? "Delivering" : "Unavailable — using the in-app centre only",
+                    "AppNotificationManager (Windows App SDK)"),
+                new DiagnosticEntry(
+                    "Unacknowledged alerts",
+                    _alerts.UnacknowledgedCount.ToString(CultureInfo.InvariantCulture),
+                    "IAlertMonitoringService"),
+            ]),
             BuildBatterySection(_monitoring.Capabilities),
         ];
 
@@ -168,6 +182,10 @@ public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
                 "Active insights",
                 database.InsightRowCount.ToString("N0", CultureInfo.InvariantCulture),
                 "Insight — rule-based, confidence-gated"));
+            entries.Add(new DiagnosticEntry(
+                "Alert rows",
+                database.AlertRowCount.ToString("N0", CultureInfo.InvariantCulture),
+                "Alert — history, retained 90 days"));
             entries.Add(new DiagnosticEntry(
                 "Last write",
                 database.LastWriteUtc is DateTimeOffset lastWrite ? DescribeAgo(lastWrite) : "Not written yet this session",

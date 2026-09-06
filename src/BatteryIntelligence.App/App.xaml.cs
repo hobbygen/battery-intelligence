@@ -4,6 +4,7 @@ using BatteryIntelligence.App.Windows;
 using BatteryIntelligence.Analytics;
 using BatteryIntelligence.Battery;
 using BatteryIntelligence.Battery.Sources;
+using BatteryIntelligence.Notifications;
 using BatteryIntelligence.Core.Analytics;
 using BatteryIntelligence.Core.Configuration;
 using BatteryIntelligence.Core.Constants;
@@ -95,6 +96,12 @@ public partial class App : Application
         {
             Log.Warning("Database migration failed; battery history will not be recorded this session.");
         }
+
+        // Register with the OS notification platform before hosted services
+        // start, so the alert engine's first evaluation can already deliver a
+        // toast. A failure here is non-fatal — alerts fall back to the in-app
+        // centre (spec §21).
+        _host.Services.GetRequiredService<WindowsToastPresenter>().Register();
 
         _host.Start();
 
@@ -294,6 +301,17 @@ public partial class App : Application
         services.AddSingleton<AnalyticsService>();
         services.AddSingleton<IAnalyticsService>(sp => sp.GetRequiredService<AnalyticsService>());
         services.AddHostedService(sp => sp.GetRequiredService<AnalyticsService>());
+        services.AddSingleton<IAlertStore, AlertStore>();
+
+        // Alerts (Phase 9) — registered after Analytics and Process so their
+        // state feeds the evaluation input. The toast presenter is the only place
+        // the WinAppSDK notification API is used; a failure there degrades to the
+        // in-app centre silently (spec §21).
+        services.AddSingleton<WindowsToastPresenter>();
+        services.AddSingleton<INotificationPresenter>(sp => sp.GetRequiredService<WindowsToastPresenter>());
+        services.AddSingleton<AlertMonitoringService>();
+        services.AddSingleton<IAlertMonitoringService>(sp => sp.GetRequiredService<AlertMonitoringService>());
+        services.AddHostedService(sp => sp.GetRequiredService<AlertMonitoringService>());
 
         // View models
         services.AddSingleton<ShellViewModel>();
@@ -306,6 +324,7 @@ public partial class App : Application
         services.AddTransient<AppUsageViewModel>();
         services.AddTransient<StatisticsViewModel>();
         services.AddTransient<InsightsViewModel>();
+        services.AddTransient<AlertsViewModel>();
         services.AddTransient<AboutViewModel>();
     }
 
@@ -320,6 +339,15 @@ public partial class App : Application
 
     private void Shutdown()
     {
+        try
+        {
+            _host?.Services.GetService<WindowsToastPresenter>()?.Unregister();
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Notification unregister failed during shutdown.");
+        }
+
         try
         {
             _host?.StopAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();

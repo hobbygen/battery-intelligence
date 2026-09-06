@@ -6,13 +6,14 @@ with exit criteria and deviations) and docs/traceability.md (requirement ->
 implementation -> test). This file is the fast orientation layer on top of those.
 
 ============================================================
-CURRENT STATUS: Phase 8 of 15 complete. Analytics engine shipped —
-health score, degradation trend, runtime estimate, statistics, insights.
-Ready to start Phase 9 (Alerts).
+CURRENT STATUS: Phase 9 of 15 complete. Alert engine shipped —
+thresholds with hysteresis + cooldown, Windows toasts + in-app centre,
+alert history, per-alert config.
+Ready to start Phase 10 (Dashboard).
 ============================================================
 
 Solution builds clean (0 warnings, 0 errors) in Debug and Release.
-Test totals: 264 passing — 195 Tests.Unit, 30 Tests.Simulation, 39 Tests.Integration.
+Test totals: 281 passing — 205 Tests.Unit, 33 Tests.Simulation, 43 Tests.Integration.
 Verified live on the reference machine (Dell laptop, Windows 11 build 26200,
 battery DELL 68ND307 / SMP / LiP, 40.0% retention — this is a real worn battery,
 not an error, and is documented as the reference reading in capability-matrix.md).
@@ -23,7 +24,7 @@ To rebuild and re-verify from scratch:
   dotnet test BatteryIntelligence.slnx -c Debug
   dotnet run --project src/BatteryIntelligence.App/BatteryIntelligence.App.csproj -c Debug
     (launches the real WinUI app; Dashboard, Battery, Power, Sessions, Temperature,
-     App Usage, Statistics and Diagnostics pages show live data)
+     App Usage, Statistics, Alerts and Diagnostics pages show live data)
 
 ------------------------------------------------------------
 PHASE 0 — Architecture (complete, done before this session history began)
@@ -507,20 +508,75 @@ Key deviations (see docs/roadmap.md Phase 8):
 - Statistics window selector: Today/7d/30d/Lifetime (custom range is Phase 11).
 - No V002 migration — every table used exists from V001.
 
-============================================================
-WHAT'S NEXT: PHASE 9 — Alerts
-============================================================
-Per docs/roadmap.md: alert engine with thresholds, hysteresis and cooldown;
-Windows notifications with in-app fallback; alert history; per-alert
-configuration; Alerts page.
-Depends on: Phases 2, 3, 8 — all done.
-Exit: no duplicate or storming notifications; every default alert from spec §20
-configurable; notification failure degrades to in-app without error.
+------------------------------------------------------------
+PHASE 9 — Alerts (complete)
+------------------------------------------------------------
+The bridge between "the app knows something is wrong" and "the user finds out".
+Built like Phases 5-8: a pure engine in Core.Alerts, a promoted infra-sibling
+orchestrator, a Data store behind a Core seam, coalesced view models.
+AlertSettings, NotificationSettings and the Alert table all existed already —
+NO migration.
 
-The Alerts page and the title-bar alert bell are already built as honest
-"arrives in Phase 9" placeholders. AlertSettings (spec §20/§35) already exists in
-SettingsCategories.cs; the Alert table exists from V001. The Notifications project
-is still a stub (promote it in Phase 9).
+What shipped:
+- Core.Alerts.AlertRuleEngine (pure, stateful, clock-injected): one rule per
+  AlertType (low/critical/fully-charged/high-temp/rapid-discharge/slow-charging/
+  charger-connected/-disconnected/health-degradation/high-app-consumption). Each
+  threshold rule has HYSTERESIS (fires on the entering edge, re-arms past a
+  margin) + a COOLDOWN (no re-fire within CooldownMinutes; health-degradation
+  gets 24h). Charger events are edge-triggered off the AC line. New Alert /
+  AlertEvaluationInput models, AlertType / AlertSeverity enums. Core interfaces
+  INotificationPresenter / IAlertMonitoringService / IAlertStore;
+  DataSettings.AlertRetentionDays (90).
+- Notifications project: PROMOTED from the ModuleMarker stub, stays plain net10.0
+  (engine + orchestrator are pure). AlertMonitoringService (hosted) rides the
+  battery/analytics/process monitors (debounced), builds the input (pct, state,
+  AC, temp, discharge/charge rate + 7-day baselines, health, degradation slope,
+  top-app share), runs the engine, persists every fired alert (priority write),
+  always raises it in-app, then asks the presenter for a toast — a toast failure
+  logs at Debug and is otherwise silent. Engine timed off the reading's
+  timestamp, not wall-clock, so the orchestrator is deterministic under test.
+- Data: AlertRepository + AlertStore; DatabaseMaintenanceService drops Alert rows
+  past AlertRetentionDays; AlertRowCount on the Diagnostics facts.
+- App: WindowsToastPresenter (AppNotificationManager for the unpackaged app,
+  Register() + every Show fully wrapped; on failure IsAvailable stays false and
+  the alert is in-app only). Rebuilt AlertsPage (active list, per-alert rules
+  with toggles + sliders, delivery toggles, history) via a new ToggleRow control.
+  ShellViewModel.AlertCount is the real unacknowledged count; the title-bar bell
+  gained a badge + a recent-alerts flyout with "Acknowledge all" / "View all".
+  Diagnostics shows the alert row count + notification-channel status.
+
+Verified live on the reference machine (2026-09-06): "Windows notifications
+registered." in the log (AppNotificationManager.Register() succeeded on this
+box); with the fully-charged threshold forced low, the engine fired one
+FullyCharged alert — persisted (1 Alert row, unacked 1), correct message with the
+real 54% figure, toast shown, no error. No crash, no layout cycle. Solution
+builds clean Debug + Release; 281 tests pass (205 + 33 + 43). The synthetic test
+alert was removed afterward.
+
+Key deviations (see docs/roadmap.md Phase 9):
+- Notifications project is plain net10.0; the one Windows API lives in
+  WindowsToastPresenter in App behind the INotificationPresenter seam.
+- RapidDischarge / SlowCharging ship as rules but stay off by default; they use
+  the 7-day baseline from IAnalyticsService, so they need a week of history.
+- HighApplicationConsumption fires on the top app's estimated share, on battery
+  only (per-app absolute power is Unavailable on AC).
+- The engine is timed off the battery reading's timestamp, not wall-clock.
+- No V002 migration — the Alert table exists from V001.
+
+============================================================
+WHAT'S NEXT: PHASE 10 — Dashboard
+============================================================
+Per docs/roadmap.md: all eight cards integrated, responsive grid, grade badges,
+info tooltips, empty/unavailable states per card, throttled 1 Hz update path.
+Depends on: Phases 2, 4-9 — all done.
+Exit: dashboard correct at 1366x768 through 4K with no clipping; updates stay
+throttled regardless of sampling rate.
+
+Most Dashboard cards already exist and are wired to live data (battery, power,
+session, temperature, app usage, health, insights). Phase 10 is largely
+integration + layout hardening: a responsive card grid (currently single-column
+with a horizontal-scroll fallback), per-card info tooltips, and verifying the
+1 Hz throttle holds. No new subsystem.
 
 ============================================================
 PROJECT STRUCTURE QUICK MAP (for when you do need to open files)
