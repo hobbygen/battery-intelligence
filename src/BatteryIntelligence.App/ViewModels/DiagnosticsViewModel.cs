@@ -56,6 +56,7 @@ public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
     private readonly IHistoryReadStore _history;
     private readonly IMonitoringStatusRegistry _status;
     private readonly ILogReader _logReader;
+    private readonly ISelfMetrics _selfMetrics;
     private readonly DispatcherQueue _dispatcher;
     private readonly IReadOnlyList<DiagnosticSection> _staticSections;
     private IReadOnlyList<DiagnosticSection> _sections;
@@ -72,7 +73,8 @@ public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
         IAlertMonitoringService alerts,
         IHistoryReadStore history,
         IMonitoringStatusRegistry status,
-        ILogReader logReader)
+        ILogReader logReader,
+        ISelfMetrics selfMetrics)
     {
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(monitoring);
@@ -81,6 +83,7 @@ public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
         ArgumentNullException.ThrowIfNull(history);
         ArgumentNullException.ThrowIfNull(status);
         ArgumentNullException.ThrowIfNull(logReader);
+        ArgumentNullException.ThrowIfNull(selfMetrics);
 
         _logger = logger;
         _monitoring = monitoring;
@@ -89,6 +92,7 @@ public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
         _history = history;
         _status = status;
         _logReader = logReader;
+        _selfMetrics = selfMetrics;
         _dispatcher = DispatcherQueue.GetForCurrentThread();
         _staticSections = BuildSections();
         _sections = _staticSections;
@@ -231,6 +235,7 @@ public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
         [
             .. _staticSections,
             BuildMonitoringSection(_status.Snapshot()),
+            BuildFootprintSection(_selfMetrics.Capture()),
             BuildStorageSection(database, historyExtent),
             new DiagnosticSection("Alerts", [
                 new DiagnosticEntry(
@@ -284,6 +289,7 @@ public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
             s.Health switch
             {
                 MonitoringHealth.Healthy => "Healthy",
+                MonitoringHealth.Retrying => $"Retrying — {s.LastError}",
                 MonitoringHealth.Degraded => $"Degraded — {s.LastError}",
                 _ => "Starting…",
             },
@@ -292,11 +298,39 @@ public sealed partial class DiagnosticsViewModel : ObservableObject, IDisposable
         return new DiagnosticSection("Monitoring", entries);
     }
 
+    /// <summary>
+    /// This process's own resource use against the budgets (docs/monitoring-dataflow.md
+    /// section 1). A monitor that costs more than it measures is part of the problem.
+    /// </summary>
+    private static DiagnosticSection BuildFootprintSection(SelfMetricsSnapshot m)
+    {
+        return new DiagnosticSection("This app's footprint",
+        [
+            new DiagnosticEntry(
+                "CPU",
+                m.ProcessCpuPercent is double c ? $"{c:F2} % of one core" : "measuring…",
+                "budget < 0.5 % average"),
+            new DiagnosticEntry("Working set", FormatBytes(m.WorkingSetBytes), "budget < 150 MB with the window open"),
+            new DiagnosticEntry("Private bytes", FormatBytes(m.PrivateBytes), "committed, non-shared"),
+            new DiagnosticEntry("Managed heap", FormatBytes(m.GcHeapBytes), "GC.GetTotalMemory"),
+            new DiagnosticEntry("Threads", m.ThreadCount.ToString(CultureInfo.InvariantCulture), "OS threads"),
+            new DiagnosticEntry(
+                "Pending writes",
+                m.PendingWrites.ToString(CultureInfo.InvariantCulture),
+                "batched; flushes at 200 rows or 30 s"),
+            new DiagnosticEntry(
+                "Last flush",
+                m.LastFlushUtc is DateTimeOffset f ? DescribeAgo(f) : "not yet this session",
+                "write queue"),
+        ]);
+    }
+
     private static string DescribeActivity(MonitoringStatus status)
     {
-        if (status.Health == MonitoringHealth.Degraded && status.LastFailureUtc is DateTimeOffset failed)
+        if (status.Health is MonitoringHealth.Degraded or MonitoringHealth.Retrying
+            && status.LastFailureUtc is DateTimeOffset failed)
         {
-            return $"{status.ConsecutiveFailures} consecutive failures; last {DescribeAgo(failed)}";
+            return $"{status.ConsecutiveFailures} consecutive failure(s); last {DescribeAgo(failed)}";
         }
 
         return status.LastSuccessUtc is DateTimeOffset ok

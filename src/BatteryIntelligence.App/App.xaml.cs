@@ -233,6 +233,12 @@ public partial class App : Application
         services.AddSingleton<IMonitoringStatusRegistry, MonitoringStatusRegistry>();
         services.AddSingleton<ILogReader, LogFileReader>();
 
+        // Adaptive sampling (Phase 13) — the visibility signal the samplers read,
+        // and the self-metrics the Diagnostics footprint section shows.
+        services.AddSingleton<AppVisibilityState>();
+        services.AddSingleton<IAppVisibilityState>(sp => sp.GetRequiredService<AppVisibilityState>());
+        services.AddSingleton<ISelfMetrics, SelfMetrics>();
+
         // Persistence (Phase 3)
         services.AddSingleton<ISqliteConnectionFactory>(sp =>
         {

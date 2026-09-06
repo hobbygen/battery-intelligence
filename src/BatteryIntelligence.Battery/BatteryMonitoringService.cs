@@ -4,6 +4,7 @@ using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Interfaces;
 using BatteryIntelligence.Core.Models;
+using BatteryIntelligence.Core.Monitoring;
 using BatteryIntelligence.Core.Primitives;
 using BatteryIntelligence.Windows;
 using Microsoft.Extensions.Hosting;
@@ -32,7 +33,9 @@ public sealed class BatteryMonitoringService : IBatteryMonitoringService, IHoste
     private readonly BatteryMessageWindow? _messageWindow;
     private readonly ILogger<BatteryMonitoringService> _logger;
     private readonly IMonitoringStatusRegistry _status;
+    private readonly IAppVisibilityState _visibility;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
+    private readonly Lock _intervalLock = new();
 
     private Timer? _timer;
     private CancellationTokenSource? _stopping;
@@ -41,12 +44,17 @@ public sealed class BatteryMonitoringService : IBatteryMonitoringService, IHoste
     private volatile bool _isAwake = true;
     private readonly Dictionary<string, double> _lastPercentageByBattery = [];
 
+    private ScreenState _screenState = ScreenState.Unknown;
+    private int _consecutiveFailures;
+    private TimeSpan _currentInterval = TimeSpan.FromSeconds(5);
+
     public BatteryMonitoringService(
         IBatteryProvider provider,
         IBatteryCapabilityDetector capabilityDetector,
         ISettingsService settings,
         ILogger<BatteryMonitoringService> logger,
         IMonitoringStatusRegistry status,
+        IAppVisibilityState visibility,
         BatteryMessageWindow? messageWindow = null)
     {
         ArgumentNullException.ThrowIfNull(provider);
@@ -54,13 +62,27 @@ public sealed class BatteryMonitoringService : IBatteryMonitoringService, IHoste
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(status);
+        ArgumentNullException.ThrowIfNull(visibility);
 
         _provider = provider;
         _capabilityDetector = capabilityDetector;
         _settings = settings;
         _logger = logger;
         _status = status;
+        _visibility = visibility;
         _messageWindow = messageWindow;
+    }
+
+    /// <summary>The battery/power sampling interval currently in effect (adaptive or backed-off). For tests and diagnostics.</summary>
+    public TimeSpan CurrentInterval
+    {
+        get
+        {
+            lock (_intervalLock)
+            {
+                return _currentInterval;
+            }
+        }
     }
 
     public IReadOnlyList<BatterySnapshot> CurrentSnapshots => _currentSnapshots;
@@ -82,22 +104,29 @@ public sealed class BatteryMonitoringService : IBatteryMonitoringService, IHoste
             _messageWindow.NotificationReceived += OnPowerNotification;
             _messageWindow.Suspended += OnSuspended;
             _messageWindow.Resumed += OnResumed;
+            _messageWindow.ScreenStateChanged += OnScreenStateChanged;
         }
+
+        _visibility.Changed += OnAdaptiveSignalChanged;
+        _settings.Changed += OnSettingsChanged;
 
         Capabilities = await SafeDetectCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
 
         await RefreshAsync(cancellationToken).ConfigureAwait(false);
 
-        // Phase 5 tightens the verify cadence to the power-sample interval: the
-        // Power subsystem reads its electrical quantities off this same pipeline
-        // (no second electrical provider), and the session engine — fed from
-        // Updated — needs the faster tick for its debounce timing to match
-        // docs/session-engine.md's assumptions (docs/roadmap.md Phase 4 deviation
-        // "self-corrects when Phase 5 ships").
-        MonitoringSettings monitoring = _settings.Current.Monitoring;
-        int intervalSeconds = Math.Max(5, Math.Min(monitoring.BatteryVerifySeconds, monitoring.PowerSampleSeconds));
-        _timer = new Timer(OnTimerTick, null, TimeSpan.FromSeconds(intervalSeconds), TimeSpan.FromSeconds(intervalSeconds));
+        // Phase 5 tightened the verify cadence to the power-sample interval; Phase
+        // 13 makes it adaptive (docs/monitoring-dataflow.md section 3). The timer
+        // starts at whatever the current conditions resolve to and is re-armed by
+        // RecomputeInterval whenever a signal changes.
+        _timer = new Timer(OnTimerTick, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        lock (_intervalLock)
+        {
+            // Force the first RecomputeInterval to arm the timer.
+            _currentInterval = Timeout.InfiniteTimeSpan;
+        }
+
         _started = true;
+        RecomputeInterval();
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
@@ -110,11 +139,78 @@ public sealed class BatteryMonitoringService : IBatteryMonitoringService, IHoste
             _messageWindow.NotificationReceived -= OnPowerNotification;
             _messageWindow.Suspended -= OnSuspended;
             _messageWindow.Resumed -= OnResumed;
+            _messageWindow.ScreenStateChanged -= OnScreenStateChanged;
         }
+
+        _visibility.Changed -= OnAdaptiveSignalChanged;
+        _settings.Changed -= OnSettingsChanged;
 
         _timer?.Dispose();
         _timer = null;
         return Task.CompletedTask;
+    }
+
+    private void OnScreenStateChanged(object? sender, ScreenState state)
+    {
+        _screenState = state;
+        RecomputeInterval();
+    }
+
+    private void OnAdaptiveSignalChanged(object? sender, EventArgs e) => RecomputeInterval();
+
+    private void OnSettingsChanged(object? sender, SettingsChangedEventArgs e) => RecomputeInterval();
+
+    /// <summary>
+    /// Re-arms the timer from the adaptive-sampling policy plus any active retry
+    /// back-off (docs/monitoring-dataflow.md sections 3 and 8). Called from every
+    /// signal handler and after every read.
+    /// </summary>
+    private void RecomputeInterval()
+    {
+        if (!_started || _timer is null)
+        {
+            return;
+        }
+
+        MonitoringSettings monitoring = _settings.Current.Monitoring;
+        TimeSpan baseInterval = TimeSpan.FromSeconds(
+            Math.Max(5, Math.Min(monitoring.BatteryVerifySeconds, monitoring.PowerSampleSeconds)));
+        TimeSpan baseProcess = TimeSpan.FromSeconds(Math.Max(5, monitoring.ProcessSampleSeconds));
+
+        var conditions = new SamplingConditions(
+            Screen: _screenState,
+            PowerState: Aggregate?.State.Value ?? BatteryState.Unknown,
+            BatteryPercent: Aggregate?.Percentage.Value,
+            WindowVisible: _visibility.IsWindowVisible,
+            ChargingSessionActive: (Aggregate?.State.Value ?? BatteryState.Unknown) == BatteryState.Charging,
+            MonitoringPaused: monitoring.Paused,
+            AdaptiveEnabled: monitoring.AdaptiveSampling);
+
+        SamplingPlan plan = AdaptiveSamplingPolicy.Resolve(baseInterval, baseProcess, conditions);
+
+        TimeSpan target = plan.AllStopped
+            ? Timeout.InfiniteTimeSpan
+            : MonitoringBackoff.NextInterval(plan.BatteryInterval, _consecutiveFailures);
+
+        lock (_intervalLock)
+        {
+            if (target == _currentInterval)
+            {
+                return;
+            }
+
+            _currentInterval = target;
+        }
+
+        _timer?.Change(target == Timeout.InfiniteTimeSpan ? Timeout.InfiniteTimeSpan : target, target);
+        if (target == Timeout.InfiniteTimeSpan)
+        {
+            _logger.LogInformation("Battery/power sampling stopped (monitoring paused).");
+        }
+        else
+        {
+            _logger.LogDebug("Battery/power sampling interval set to {Seconds:F1} s.", target.TotalSeconds);
+        }
     }
 
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
@@ -144,19 +240,26 @@ public sealed class BatteryMonitoringService : IBatteryMonitoringService, IHoste
             Aggregate = BatteryAggregation.Aggregate(snapshots, DateTimeOffset.UtcNow);
             LastError = null;
             _status.ReportSuccess(MonitoringComponent.Battery);
+            _consecutiveFailures = 0;
         }
         catch (Exception ex)
         {
             // A read failure must not stop monitoring — the next timer tick or
-            // notification tries again (specification section 44).
+            // notification tries again (specification section 44). Each further
+            // failure widens the retry interval (docs/monitoring-dataflow.md §8).
             LastError = ex.Message;
             _status.ReportFailure(MonitoringComponent.Battery, ex.Message);
-            _logger.LogWarning(ex, "Battery read failed.");
+            _consecutiveFailures++;
+            _logger.LogWarning(ex, "Battery read failed (attempt {Count}).", _consecutiveFailures);
         }
         finally
         {
             _refreshGate.Release();
         }
+
+        // The reading may have crossed 20 % or reached Full, or a failure run may
+        // have started or ended — re-arm the timer accordingly.
+        RecomputeInterval();
 
         Updated?.Invoke(this, EventArgs.Empty);
     }
@@ -231,7 +334,7 @@ public sealed class BatteryMonitoringService : IBatteryMonitoringService, IHoste
 
     private void OnTimerTick(object? state)
     {
-        if (!_started || _stopping is { IsCancellationRequested: true })
+        if (!_started || _stopping is { IsCancellationRequested: true } || _settings.Current.Monitoring.Paused)
         {
             return;
         }
@@ -241,7 +344,7 @@ public sealed class BatteryMonitoringService : IBatteryMonitoringService, IHoste
 
     private void OnPowerNotification(object? sender, PowerNotificationKind kind)
     {
-        if (!_started)
+        if (!_started || _settings.Current.Monitoring.Paused)
         {
             return;
         }

@@ -67,11 +67,11 @@ public sealed class MonitoringStatusRegistry : IMonitoringStatusRegistry
             MonitoringStatus current = _statuses[component];
             int failures = current.ConsecutiveFailures + 1;
 
-            // A single blip does not make a subsystem Degraded — keep the prior
-            // health until the threshold is crossed.
+            // One or two failures is Retrying (the sampler is backing off but may
+            // recover); the threshold makes it Degraded.
             MonitoringHealth health = failures >= DegradedThreshold
                 ? MonitoringHealth.Degraded
-                : current.Health == MonitoringHealth.Starting ? MonitoringHealth.Healthy : current.Health;
+                : MonitoringHealth.Retrying;
 
             MonitoringStatus updated = current with
             {

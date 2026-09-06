@@ -112,6 +112,20 @@ extends the battery it is monitoring.
 Adaptive sampling never changes what is *recorded* about a transition — events are
 always captured at full fidelity. It only reduces the rate of routine telemetry.
 
+**Implemented (Phase 13).** `Core.Monitoring.AdaptiveSamplingPolicy.Resolve` is
+this table, pure and unit-tested. The battery/power pipeline
+(`BatteryMonitoringService`) and the process sampler (`ProcessMonitoringService`)
+each rebuild their timer interval from it whenever a signal changes — screen
+state, AC/charge state, battery %, window visibility, the `Monitoring.Paused`
+flag, or `Monitoring.AdaptiveSampling` being turned off. Precedence: **paused**
+stops everything; **battery < 20 % while discharging** takes the finer ×0.5 rate
+and beats every back-off; an **active charging session** holds the base rate over
+a screen-off back-off; every resolved interval is clamped to the 1–300 s
+`MonitoringSettings` range. "Window hidden" is a ViewModel-side skip of the chart
+rebuild (`IAppVisibilityState`) — the service keeps sampling for the database.
+`ThermalMonitoringService` rides the battery monitor's cadence and inherits the
+back-off for free.
+
 ---
 
 ## 4. Validation
@@ -212,8 +226,9 @@ Spec §75 forbids refreshing the dashboard per sample. Concretely:
 - **Numeric readouts** update at most **1 Hz**, regardless of a 5 s or 1 s sampling
   interval, coalescing intermediate values.
 - **Charts** hold **bounded** collections — a fixed point budget per series
-  (default 600). Beyond it, points are downsampled with min/max preservation so
-  spikes survive decimation rather than being averaged away.
+  (default 600: `PowerMonitoringService.ChartPointBudget`, `HistoryRequest.PointBudget`).
+  Beyond it, points are downsampled with min/max preservation so spikes survive
+  decimation rather than being averaged away.
 - **Lists** (processes, sessions, alerts) are virtualised and re-sorted on a
   throttle, not per sample.
 - **Hidden pages do not update.** Navigating away unsubscribes; navigating back
@@ -248,11 +263,11 @@ disk-write budget.
 No sampler failure can affect another. A dead temperature sensor degrades exactly
 one page.
 
-**Implemented (Phase 12).** `Core.Diagnostics.MonitoringStatusRegistry` realises
-the `Healthy`/`Degraded` surface: every hosted orchestrator reports each tick's
-outcome, and the registry flips a component to `Degraded` after three consecutive
-failures and back to `Healthy` on the next success. The Diagnostics page's
-"Monitoring" section renders it with the last error. The intermediate `Retrying`
-state and its exponential backoff are **not** built yet — orchestrators currently
-catch and retry at their normal fixed cadence; the backoff layer lands with the
-Phase 13 adaptive-sampling work.
+**Implemented (Phases 12–13).** `Core.Diagnostics.MonitoringStatusRegistry`
+realises the state surface: every hosted orchestrator reports each tick's outcome.
+`Healthy` → `Retrying` on the first failure → `Degraded` at three consecutive
+failures → `Healthy` on the next success. The Diagnostics "Monitoring" section
+renders it with the last error. The exponential back-off
+(`Core.Monitoring.MonitoringBackoff`, base × 2ⁿ capped at 5 min) is applied by the
+battery and process samplers directly: on a failed tick each widens its own timer
+interval, and a success restores the adaptive rate.

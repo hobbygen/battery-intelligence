@@ -191,6 +191,83 @@ public sealed class ProcessMonitoringServiceTests
             registry.Snapshot().Single(s => s.Component == MonitoringComponent.ApplicationUsage).Health);
     }
 
+    [Fact]
+    public async Task Interval_Adapts_ToScreenOffOnBattery_AndRestoresWhenTheScreenComesBack()
+    {
+        FakeEnumerator processes = new(coreCount: 4);
+        FakeBattery battery = new();
+        FakeSessions sessions = new();
+        ProcessMonitoringService service = Create(processes, battery, queue: new FakeQueue(), sessions);
+
+        await service.StartAsync(CancellationToken.None);
+        try
+        {
+            TimeSpan baseInterval = service.CurrentInterval;
+
+            sessions.CurrentScreenState = ScreenState.Off;
+            battery.SetDischarging(-5_000); // fires battery.Updated -> RecomputeInterval
+
+            Assert.Equal(baseInterval * 3, service.CurrentInterval);
+
+            sessions.CurrentScreenState = ScreenState.On;
+            battery.SetDischarging(-5_000);
+
+            Assert.Equal(baseInterval, service.CurrentInterval);
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Fact]
+    public async Task Interval_Adapts_ToLowBattery_WithAFinerRate()
+    {
+        FakeBattery battery = new();
+        ProcessMonitoringService service = Create(new FakeEnumerator(4), battery, new FakeQueue(), new FakeSessions());
+
+        await service.StartAsync(CancellationToken.None);
+        try
+        {
+            TimeSpan baseInterval = service.CurrentInterval;
+            battery.SetDischarging(-8_000, percent: 12);
+
+            Assert.Equal(baseInterval * 0.5, service.CurrentInterval);
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Fact]
+    public async Task Interval_WidensAfterRepeatedFailures_AndRestoresOnSuccess()
+    {
+        FakeEnumerator processes = new(coreCount: 4) { ThrowOnEnumerate = true };
+        ProcessMonitoringService service = Create(processes, new FakeBattery(), new FakeQueue(), new FakeSessions());
+
+        await service.StartAsync(CancellationToken.None);
+        try
+        {
+            TimeSpan start = service.CurrentInterval;
+
+            // The first failed tick keeps the base interval; the second widens it.
+            service.Tick(Start);
+            service.Tick(Start.AddSeconds(1));
+            Assert.True(service.CurrentInterval > start, "interval should widen while failing");
+
+            processes.ThrowOnEnumerate = false;
+            processes.Set(Proc(100, "chrome", TimeSpan.FromSeconds(1)));
+            service.Tick(Start.AddSeconds(2));
+
+            Assert.Equal(start, service.CurrentInterval);
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+    }
+
     private static ProcessMonitoringService Create(
         FakeEnumerator processes, FakeBattery battery, FakeQueue queue, FakeSessions sessions, int topApplicationCount = 40) =>
         Create(processes, battery, queue, sessions, new MonitoringStatusRegistry(), topApplicationCount);
@@ -202,7 +279,7 @@ public sealed class ProcessMonitoringServiceTests
         settings.Current.Processes.TopApplicationCount = topApplicationCount;
         settings.Current.Processes.IdleCpuFloorPercent = 3.0;
         return new ProcessMonitoringService(
-            processes, battery, sessions, queue, settings, NullLogger<ProcessMonitoringService>.Instance, registry);
+            processes, battery, sessions, queue, settings, NullLogger<ProcessMonitoringService>.Instance, registry, new AppVisibilityState());
     }
 
     private static ProcessRawSample Proc(int pid, string name, TimeSpan cpu, bool foreground = false) => new(
@@ -245,7 +322,7 @@ public sealed class ProcessMonitoringServiceTests
     {
         public IReadOnlyList<BatterySnapshot> CurrentSnapshots { get; private set; } = [];
 
-        public BatteryInfo? Aggregate => null;
+        public BatteryInfo? Aggregate { get; private set; }
 
         public CapabilitySnapshot? Capabilities => null;
 
@@ -253,11 +330,11 @@ public sealed class ProcessMonitoringServiceTests
 
         public event EventHandler? Updated;
 
-        public void SetDischarging(int powerMw) => Set(BatteryState.Discharging, powerMw, acOnline: false);
+        public void SetDischarging(int powerMw, double percent = 60) => Set(BatteryState.Discharging, powerMw, acOnline: false, percent);
 
-        public void SetCharging() => Set(BatteryState.Charging, 12_000, acOnline: true);
+        public void SetCharging() => Set(BatteryState.Charging, 12_000, acOnline: true, percent: 60);
 
-        private void Set(BatteryState state, int powerMw, bool acOnline)
+        private void Set(BatteryState state, int powerMw, bool acOnline, double percent = 60)
         {
             BatteryDevice device = new(
                 "battery0", "Test Battery", "Test Mfr", "SN", "LiP",
@@ -268,7 +345,7 @@ public sealed class ProcessMonitoringServiceTests
             {
                 BatteryId = "battery0",
                 TimestampUtc = DateTimeOffset.UtcNow,
-                Percentage = Measurement<double>.Measured(60, MeasurementSource.WinRtBattery),
+                Percentage = Measurement<double>.Measured(percent, MeasurementSource.WinRtBattery),
                 State = Measurement<BatteryState>.Measured(state, MeasurementSource.WinRtBattery),
                 AcOnline = Measurement<bool>.Measured(acOnline, MeasurementSource.SystemPowerStatus),
                 RemainingCapacityMWh = Measurement<int>.Measured(22_000, MeasurementSource.WinRtBattery),
@@ -283,6 +360,7 @@ public sealed class ProcessMonitoringServiceTests
             };
 
             CurrentSnapshots = [new BatterySnapshot(device, info)];
+            Aggregate = info;
             Updated?.Invoke(this, EventArgs.Empty);
         }
 

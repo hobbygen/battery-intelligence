@@ -5,8 +5,11 @@ namespace BatteryIntelligence.Core.Models;
 /// <summary>One history chart query (specification section 17).</summary>
 /// <param name="Metric">Which metric to chart.</param>
 /// <param name="Range">The time window.</param>
-/// <param name="PointBudget">Maximum points after min/max-preserving downsampling.</param>
-public sealed record HistoryRequest(HistoryMetric Metric, DateRange Range, int PointBudget = 800);
+/// <param name="PointBudget">
+/// Maximum points after min/max-preserving downsampling. Defaults to the
+/// docs/monitoring-dataflow.md section 7 chart budget (600).
+/// </param>
+public sealed record HistoryRequest(HistoryMetric Metric, DateRange Range, int PointBudget = 600);
 
 /// <summary>What to export (specification section 36).</summary>
 /// <param name="Range">The time window rows must fall in.</param>

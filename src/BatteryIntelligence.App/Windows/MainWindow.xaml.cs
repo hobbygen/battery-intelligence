@@ -24,6 +24,7 @@ public sealed partial class MainWindow : Window
     private readonly IThemeService _theme;
     private readonly IWindowStateService _windowState;
     private readonly ISettingsService _settings;
+    private readonly AppVisibilityState _visibility;
 
     /// <summary>Set when the user chooses Exit, so the close is not turned into a hide.</summary>
     private bool _isExiting;
@@ -34,6 +35,7 @@ public sealed partial class MainWindow : Window
         IThemeService theme,
         IWindowStateService windowState,
         ISettingsService settings,
+        AppVisibilityState visibility,
         ShellViewModel viewModel)
     {
         ArgumentNullException.ThrowIfNull(logger);
@@ -41,6 +43,7 @@ public sealed partial class MainWindow : Window
         ArgumentNullException.ThrowIfNull(theme);
         ArgumentNullException.ThrowIfNull(windowState);
         ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(visibility);
         ArgumentNullException.ThrowIfNull(viewModel);
 
         _logger = logger;
@@ -48,6 +51,7 @@ public sealed partial class MainWindow : Window
         _theme = theme;
         _windowState = windowState;
         _settings = settings;
+        _visibility = visibility;
         ViewModel = viewModel;
 
         InitializeComponent();
@@ -72,6 +76,11 @@ public sealed partial class MainWindow : Window
 
         AppWindow.Closing += OnAppWindowClosing;
         Closed += OnClosed;
+
+        // Feeds the adaptive-sampling "window hidden → chart feed suspended" case
+        // (docs/monitoring-dataflow.md section 3). AppWindow.Hide() for the tray
+        // raises this with Visible == false; showing it again raises it true.
+        VisibilityChanged += (_, e) => _visibility.SetVisible(e.Visible);
 
         NavigateToStartupPage();
     }

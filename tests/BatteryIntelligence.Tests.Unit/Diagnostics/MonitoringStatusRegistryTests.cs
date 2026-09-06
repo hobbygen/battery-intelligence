@@ -35,7 +35,7 @@ public sealed class MonitoringStatusRegistryTests
     }
 
     [Fact]
-    public void ReportFailure_BelowThreshold_RecordsTheErrorButIsNotDegraded()
+    public void ReportFailure_BelowThreshold_IsRetrying()
     {
         var registry = new MonitoringStatusRegistry();
 
@@ -43,7 +43,7 @@ public sealed class MonitoringStatusRegistryTests
         registry.ReportFailure(MonitoringComponent.Battery, "two");
 
         MonitoringStatus status = Status(registry, MonitoringComponent.Battery);
-        Assert.NotEqual(MonitoringHealth.Degraded, status.Health);
+        Assert.Equal(MonitoringHealth.Retrying, status.Health);
         Assert.Equal("two", status.LastError);
         Assert.Equal(2, status.ConsecutiveFailures);
     }

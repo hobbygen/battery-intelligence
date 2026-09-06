@@ -18,10 +18,8 @@ public enum MonitoringComponent
 }
 
 /// <summary>
-/// The health of one subsystem. A simplification of the
-/// <c>Healthy → Retrying → Degraded</c> model in docs/monitoring-dataflow.md
-/// section 8 — the retry/backoff layer is not built yet, so only the two states
-/// the Diagnostics page needs are surfaced, plus <see cref="Starting"/> for the
+/// The health of one subsystem — the <c>Healthy → Retrying → Degraded</c> model
+/// in docs/monitoring-dataflow.md section 8, plus <see cref="Starting"/> for the
 /// window before a subsystem's first tick.
 /// </summary>
 public enum MonitoringHealth
@@ -32,8 +30,14 @@ public enum MonitoringHealth
     /// <summary>The last tick succeeded.</summary>
     Healthy = 1,
 
+    /// <summary>
+    /// One or two consecutive ticks have failed — the sampler is retrying at a
+    /// widening interval but the subsystem may still recover on its own.
+    /// </summary>
+    Retrying = 2,
+
     /// <summary>At least <c>MonitoringStatusRegistry.DegradedThreshold</c> consecutive ticks have failed.</summary>
-    Degraded = 2,
+    Degraded = 3,
 }
 
 /// <summary>One subsystem's current monitoring state (specification section 26).</summary>

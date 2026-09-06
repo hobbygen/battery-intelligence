@@ -2,6 +2,7 @@ using BatteryIntelligence.Core.Configuration;
 using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Interfaces;
+using BatteryIntelligence.Core.Monitoring;
 using BatteryIntelligence.Core.Models;
 using BatteryIntelligence.Core.Primitives;
 using BatteryIntelligence.Core.Processes;
@@ -39,8 +40,10 @@ public sealed class ProcessMonitoringService : IProcessMonitoringService, IHoste
     private readonly ISettingsService _settings;
     private readonly ILogger<ProcessMonitoringService> _logger;
     private readonly IMonitoringStatusRegistry _status;
+    private readonly IAppVisibilityState _visibility;
 
     private readonly Lock _sync = new();
+    private readonly Lock _intervalLock = new();
     private readonly Dictionary<(int Pid, long StartTicks), (TimeSpan Cpu, DateTimeOffset At)> _previousCpu = [];
     private readonly List<WindowTick> _ticks = [];
 
@@ -48,6 +51,9 @@ public sealed class ProcessMonitoringService : IProcessMonitoringService, IHoste
     private BaselineEstimator _baseline = new(4_000);
     private Timer? _timer;
     private volatile bool _started;
+    private int _consecutiveFailures;
+    private bool _paused;
+    private TimeSpan _currentInterval = TimeSpan.FromSeconds(10);
 
     private AppEnergyAttribution _current = AppEnergyAttribution.Empty(AppEnergyEstimator.Version, DateTimeOffset.UtcNow);
 
@@ -65,7 +71,8 @@ public sealed class ProcessMonitoringService : IProcessMonitoringService, IHoste
         IProcessSampleWriteQueue writeQueue,
         ISettingsService settings,
         ILogger<ProcessMonitoringService> logger,
-        IMonitoringStatusRegistry status)
+        IMonitoringStatusRegistry status,
+        IAppVisibilityState visibility)
     {
         ArgumentNullException.ThrowIfNull(enumerator);
         ArgumentNullException.ThrowIfNull(battery);
@@ -74,6 +81,7 @@ public sealed class ProcessMonitoringService : IProcessMonitoringService, IHoste
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(status);
+        ArgumentNullException.ThrowIfNull(visibility);
 
         _enumerator = enumerator;
         _battery = battery;
@@ -81,6 +89,7 @@ public sealed class ProcessMonitoringService : IProcessMonitoringService, IHoste
         _writeQueue = writeQueue;
         _settings = settings;
         _logger = logger;
+        _visibility = visibility;
         _status = status;
     }
 
@@ -99,6 +108,18 @@ public sealed class ProcessMonitoringService : IProcessMonitoringService, IHoste
     /// <inheritdoc/>
     public event EventHandler? Updated;
 
+    /// <summary>The process sampling interval currently in effect (adaptive or backed-off). For tests and diagnostics.</summary>
+    public TimeSpan CurrentInterval
+    {
+        get
+        {
+            lock (_intervalLock)
+            {
+                return _currentInterval;
+            }
+        }
+    }
+
     /// <inheritdoc/>
     public Task StartAsync(CancellationToken cancellationToken)
     {
@@ -106,9 +127,19 @@ public sealed class ProcessMonitoringService : IProcessMonitoringService, IHoste
         _baseline = new BaselineEstimator(_settings.Current.Processes.DefaultBaselineMw);
 
         int seconds = Math.Max(5, _settings.Current.Monitoring.ProcessSampleSeconds);
-        TimeSpan interval = TimeSpan.FromSeconds(seconds);
+        _currentInterval = TimeSpan.FromSeconds(seconds);
         _started = true;
-        _timer = new Timer(_ => SafeTick(), null, TimeSpan.FromSeconds(2), interval);
+
+        // First tick in 2 s at the configured rate; RecomputeInterval (called from
+        // every signal handler and after each tick) then adapts it.
+        _timer = new Timer(_ => SafeTick(), null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(seconds));
+
+        _battery.Updated += OnAdaptiveSignalChanged;
+        _sessions.Updated += OnAdaptiveSignalChanged;
+        _visibility.Changed += OnAdaptiveSignalChanged;
+        _settings.Changed += OnSettingsChanged;
+
+        RecomputeInterval();
         return Task.CompletedTask;
     }
 
@@ -116,9 +147,70 @@ public sealed class ProcessMonitoringService : IProcessMonitoringService, IHoste
     public Task StopAsync(CancellationToken cancellationToken)
     {
         _started = false;
+
+        _battery.Updated -= OnAdaptiveSignalChanged;
+        _sessions.Updated -= OnAdaptiveSignalChanged;
+        _visibility.Changed -= OnAdaptiveSignalChanged;
+        _settings.Changed -= OnSettingsChanged;
+
         _timer?.Dispose();
         _timer = null;
         return Task.CompletedTask;
+    }
+
+    private void OnAdaptiveSignalChanged(object? sender, EventArgs e) => RecomputeInterval();
+
+    private void OnSettingsChanged(object? sender, SettingsChangedEventArgs e) => RecomputeInterval();
+
+    /// <summary>
+    /// Re-arms the timer from the adaptive-sampling policy plus any active retry
+    /// back-off (docs/monitoring-dataflow.md sections 3 and 8).
+    /// </summary>
+    private void RecomputeInterval()
+    {
+        if (!_started || _timer is null)
+        {
+            return;
+        }
+
+        MonitoringSettings monitoring = _settings.Current.Monitoring;
+        TimeSpan baseBattery = TimeSpan.FromSeconds(
+            Math.Max(5, Math.Min(monitoring.BatteryVerifySeconds, monitoring.PowerSampleSeconds)));
+        TimeSpan baseProcess = TimeSpan.FromSeconds(Math.Max(5, monitoring.ProcessSampleSeconds));
+
+        BatteryState state = _battery.Aggregate?.State.Value ?? BatteryState.Unknown;
+        var conditions = new SamplingConditions(
+            Screen: _sessions.CurrentScreenState,
+            PowerState: state,
+            BatteryPercent: _battery.Aggregate?.Percentage.Value,
+            WindowVisible: _visibility.IsWindowVisible,
+            ChargingSessionActive: _sessions.CurrentSession?.Type == SessionType.Charging,
+            MonitoringPaused: monitoring.Paused,
+            AdaptiveEnabled: monitoring.AdaptiveSampling);
+
+        SamplingPlan plan = AdaptiveSamplingPolicy.Resolve(baseBattery, baseProcess, conditions);
+        _paused = plan.AllStopped || plan.ProcessPaused;
+
+        TimeSpan target = _paused
+            ? Timeout.InfiniteTimeSpan
+            : MonitoringBackoff.NextInterval(plan.ProcessInterval, _consecutiveFailures);
+
+        lock (_intervalLock)
+        {
+            if (target == _currentInterval)
+            {
+                return;
+            }
+
+            _currentInterval = target;
+        }
+
+        _timer?.Change(
+            target == Timeout.InfiniteTimeSpan ? Timeout.InfiniteTimeSpan : target,
+            target);
+        _logger.LogDebug(
+            "Process sampling interval set to {Interval}.",
+            target == Timeout.InfiniteTimeSpan ? "paused" : $"{target.TotalSeconds:F1} s");
     }
 
     /// <inheritdoc/>
@@ -157,6 +249,8 @@ public sealed class ProcessMonitoringService : IProcessMonitoringService, IHoste
             bool published = Ingest(raw, now);
             LastError = null;
             _status.ReportSuccess(MonitoringComponent.ApplicationUsage);
+            _consecutiveFailures = 0;
+            RecomputeInterval();
             if (published)
             {
                 Updated?.Invoke(this, EventArgs.Empty);
@@ -166,13 +260,17 @@ public sealed class ProcessMonitoringService : IProcessMonitoringService, IHoste
         {
             LastError = ex.Message;
             _status.ReportFailure(MonitoringComponent.ApplicationUsage, ex.Message);
-            _logger.LogWarning(ex, "Process sampling tick failed.");
+            _consecutiveFailures++;
+            RecomputeInterval();
+            _logger.LogWarning(ex, "Process sampling tick failed (attempt {Count}).", _consecutiveFailures);
         }
     }
 
     private void SafeTick()
     {
-        if (_started)
+        // The timer is normally re-armed to Infinite when paused, but a
+        // ProcessPaused transition can race a scheduled callback.
+        if (_started && !_paused && !_settings.Current.Monitoring.Paused)
         {
             Tick(DateTimeOffset.UtcNow);
         }

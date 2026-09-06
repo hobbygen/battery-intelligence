@@ -1,20 +1,21 @@
 BATTERY INTELLIGENCE — PROGRESS TIMELINE
-Last updated: 2026-09-06
+Last updated: 2026-09-07
 Purpose: read this file first when resuming work, instead of re-reading the
 whole codebase. Full detail always lives in docs/roadmap.md (phase-by-phase,
 with exit criteria and deviations) and docs/traceability.md (requirement ->
 implementation -> test). This file is the fast orientation layer on top of those.
 
 ============================================================
-CURRENT STATUS: Phase 12 of 15 complete. Diagnostics finished —
-per-subsystem Monitoring section (MonitoringStatusRegistry, all 8
-orchestrators report), in-app log viewer, About licences card,
-"Copy report" redacts the user-profile path.
-Ready to start Phase 13 (Optimisation).
+CURRENT STATUS: Phase 13 of 15 complete. Adaptive sampling +
+retry backoff shipped — AdaptiveSamplingPolicy (§3 table) drives
+the battery & process timers off screen/AC/charge-%/visibility/
+paused; MonitoringBackoff + Retrying state; ISelfMetrics footprint
+section on Diagnostics. 24h soak + working-set work → Phase 14.
+Ready to start Phase 14 (QA).
 ============================================================
 
 Solution builds clean (0 warnings, 0 errors) in Debug and Release.
-Test totals: 342 passing — 255 Tests.Unit, 34 Tests.Simulation, 53 Tests.Integration.
+Test totals: 360 passing — 270 Tests.Unit, 37 Tests.Simulation, 53 Tests.Integration.
 Verified live on the reference machine (Dell laptop, Windows 11 build 26200,
 battery DELL 68ND307 / SMP / LiP, 40.0% retention — this is a real worn battery,
 not an error, and is documented as the reference reading in capability-matrix.md).
@@ -707,15 +708,67 @@ Key deviations (see docs/roadmap.md Phase 12):
 - Log viewer reads the current file only; the folder button opens the rest.
 - Copy report redacts only the user-profile path prefix.
 
+PHASE 13 — Optimisation (adaptive sampling + backoff; measurement)
+------------------------------------------------------------
+The deferred adaptive-sampling table (monitoring-dataflow.md §3), the
+Retrying/backoff layer (R-098), and a self-metrics surface.
+
+What shipped:
+- Core.Monitoring.AdaptiveSamplingPolicy: pure §3 table. Resolve(baseBattery,
+  baseProcess, SamplingConditions) -> SamplingPlan. Screen-off on battery x3;
+  screen-off+AC+full -> battery x6 + process paused; battery <20% discharging
+  x0.5 (finer, beats every back-off); charging session holds base rate; window
+  hidden -> ChartFeedSuspended; paused -> AllStopped. Intervals clamped 1-300 s.
+- Core.Monitoring.MonitoringBackoff.NextInterval: base * 2^(n-1), cap 5 min.
+- MonitoringHealth gained Retrying (1-2 failures) between Healthy and Degraded;
+  registry + Diagnostics label follow.
+- Core.Interfaces.IAppVisibilityState / AppVisibilityState: tiny Core seam fed
+  from MainWindow.VisibilityChanged (AppWindow.Hide() for the tray fires it).
+- BatteryMonitoringService (drives battery+power) and ProcessMonitoringService
+  each rebuild their Timer from the policy on every signal (ScreenStateChanged,
+  battery/sessions Updated, visibility Changed, settings Changed) and after each
+  read; apply the back-off on a failure run, restore adaptive rate on success.
+  Monitoring.Paused stops the timers + gates event-driven refreshes.
+  ThermalMonitoringService rides the battery cadence unchanged. Both services
+  expose CurrentInterval for tests/diagnostics.
+- Core.Diagnostics.ISelfMetrics / App.Services.SelfMetrics: process CPU%
+  (cumulative-time delta), working set, private bytes, GC heap, threads, pending
+  writes, last flush. Diagnostics "This app's footprint" section shows each vs
+  its budget.
+- Chart point budget reconciled to 600 (HistoryRequest default was 800;
+  PowerMonitoringService already 600).
+
+Verified live on the reference machine (2026-09-07): app launched with the
+startup page forced to Diagnostics and log level Debug — clean start, no crash,
+no LayoutCycle. Battery interval logged "5.0 s" (base rate, screen on). With
+monitoring.paused=true set in settings.json + restart: "Process sampling interval
+set to paused." and no battery timer arm. ~7-minute in-session soak: CPU
+negligible, battery.db-wal grew ~0.4 MB/min (under the 1 MB/min budget), working
+set 232->267 MB and appeared to plateau. Builds clean Debug + Release; 360 tests
+pass (270 + 37 + 53).
+
+IMPORTANT for Phase 14: working set ~230-270 MB with the window open EXCEEDS the
+monitoring-dataflow.md §1 150 MB budget. Most of it is the WinUI 3 / WindowsAppSDK
+runtime baseline. The Diagnostics footprint section reports it honestly. A real
+reduction (or a revised budget for the platform) + the 24h leak soak + frame-time
+profiling are Phase 14 work.
+
+Key deviations (see docs/roadmap.md Phase 13):
+- 24h soak + frame profiling deferred to Phase 14 QA (not runnable in-session).
+- Working set over the §1 budget (WinUI 3 baseline) — flagged, not fixed.
+- "Chart feed suspended when hidden" is a ViewModel-side skip, not a hard stop.
+- Monitoring.Paused honoured but no Settings toggle yet.
+- Retrying vs Degraded stays a fixed count threshold; backoff is the exponential.
+
 ============================================================
-WHAT'S NEXT: PHASE 13 — Optimisation
+WHAT'S NEXT: PHASE 14 — QA
 ============================================================
-Per docs/roadmap.md: measure against monitoring-dataflow.md §1 budgets (CPU,
-working set, disk writes, query timings, chart frame times, startup time), then
-targeted fixes; a 24-hour soak. This is also where the Retrying/exponential-
-backoff layer for R-098 and the adaptive-sampling back-off land.
-Exit: all budgets met; no leaks over 24 h; no frame > 16 ms attributable to
-monitoring.
+Per docs/roadmap.md: full unit/integration/simulation suites green; failure
+matrix (spec §62); manual checklist (testing.md §7) on Windows 10 and 11;
+accessibility pass; real sleep/resume and charger cycling. This is also where
+the 24h leak soak, frame-time profiling, and the working-set question from
+Phase 13 land.
+Exit: the twenty numbered criteria of spec §68 demonstrably satisfied.
 
 ============================================================
 PROJECT STRUCTURE QUICK MAP (for when you do need to open files)
@@ -724,7 +777,10 @@ src/BatteryIntelligence.Core          — domain, zero dependencies, net10.0 (no
     Includes Core.Sessions.SessionStateMachine (pure) despite the name overlap
     with the Sessions project — see Phase 4 deviations above.
     Core.Diagnostics (Phase 12): MonitoringStatusRegistry (all 8 orchestrators
-    report tick outcomes here), LogLineParser + LogEntry (Serilog file parsing).
+    report tick outcomes here), LogLineParser + LogEntry (Serilog file parsing),
+    ISelfMetrics (Phase 13 — footprint).
+    Core.Monitoring (Phase 13): AdaptiveSamplingPolicy (§3 table), MonitoringBackoff.
+    Core.Interfaces.IAppVisibilityState (Phase 13 — window show/hide seam).
 src/BatteryIntelligence.Windows       — Win32/WinRT interop, message window
     (now emits Suspended/Resumed/ScreenStateChanged/LockStateChanged too)
 src/BatteryIntelligence.Battery       — providers, capability detection, monitoring service
@@ -759,7 +815,8 @@ src/BatteryIntelligence.App           — WinUI 3 shell, Views, ViewModels, comp
     Controls/PowerChart is the only file touching LiveChartsCore;
     Services/WindowsToastPresenter is the only file touching AppNotificationManager;
     Services/ExportService is the only file touching the file-save picker;
-    Services/LogFileReader (Phase 12) is the only file reading the Serilog files.
+    Services/LogFileReader (Phase 12) is the only file reading the Serilog files;
+    Services/SelfMetrics (Phase 13) is the process footprint provider.
     Data-side history reads: Data/HistoryReadStore, Data/ExportDataSource,
     Data/HistoryMaintenance (Phase 11).
 tests/BatteryIntelligence.Tests.Unit         — pure logic, net10.0, fast.

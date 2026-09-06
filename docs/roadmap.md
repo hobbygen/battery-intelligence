@@ -1021,14 +1021,71 @@ redaction.
 
 ---
 
-## Phase 13 — Optimisation
+## Phase 13 — Optimisation (adaptive sampling + backoff; measurement)
 
-**Deliverables:** measurement against the `monitoring-dataflow.md` §1 budgets —
-CPU, working set, disk writes, query timings, chart frame times, startup time —
-then targeted fixes. 24-hour soak.
+The deferred adaptive-sampling table (`monitoring-dataflow.md` §3), the
+`Retrying`/backoff layer (R-098), and a self-metrics surface to measure the §1
+budgets against.
 
-**Exit:** all budgets met; no leaks over 24 h; no frame > 16 ms attributable to
-monitoring.
+**What shipped:**
+
+- `Core.Monitoring.AdaptiveSamplingPolicy` — the §3 table, pure and unit-tested:
+  `Resolve(baseBattery, baseProcess, SamplingConditions) → SamplingPlan`. Screen
+  off on battery ×3; screen off + AC + full → battery ×6, process paused; battery
+  < 20 % discharging ×0.5 (finer, and it beats every back-off); charging session
+  holds the base rate; window hidden → `ChartFeedSuspended`; monitoring paused →
+  `AllStopped`; adaptive disabled → base rates. Every interval clamped to 1–300 s.
+- `Core.Monitoring.MonitoringBackoff.NextInterval` — `base × 2^(n-1)` capped at
+  5 min.
+- `MonitoringHealth` gained `Retrying` (first 1–2 failures) between `Healthy` and
+  `Degraded`; the registry and the Diagnostics "Monitoring" label follow.
+- `Core.Interfaces.IAppVisibilityState` / `AppVisibilityState` — a tiny Core seam
+  the App feeds from `MainWindow.VisibilityChanged`.
+- `BatteryMonitoringService` (drives battery **and** power) and
+  `ProcessMonitoringService` each rebuild their `Timer` interval from the policy
+  on every relevant signal (`ScreenStateChanged`, `IBatteryMonitoringService.Updated`,
+  `ISessionMonitoringService.Updated`, `IAppVisibilityState.Changed`,
+  `ISettingsService.Changed`) and after every read, applying the back-off on a
+  failure run and restoring the adaptive rate on success. `Monitoring.Paused`
+  stops the timers and gates the event-driven refreshes.
+  `ThermalMonitoringService` rides the battery cadence unchanged. Each service
+  exposes `CurrentInterval` for tests/diagnostics.
+- `Core.Diagnostics.ISelfMetrics` / `App.Services.SelfMetrics` — process CPU %
+  (cumulative-time delta), working set, private bytes, GC heap, thread count,
+  pending writes, last flush. A **"This app's footprint"** section on the
+  Diagnostics page shows each against its budget.
+- Chart point budget reconciled to 600 (`HistoryRequest.PointBudget` default was
+  800; `PowerMonitoringService` already used 600).
+
+**Depends on:** all prior phases (12 for the registry/Diagnostics surface).
+
+**Exit criteria:**
+
+| Criterion | Result |
+|---|---|
+| Adaptive sampling per §3 | ✅ `AdaptiveSamplingPolicyTests` (every row); `ProcessMonitoringServiceTests` (screen-off ×3 live-driven, low-battery ×0.5, restores); live: battery interval logged at the base rate, process "paused" logged with `Monitoring.Paused` |
+| Graceful subsystem failure with backoff (R-098) | ✅ `MonitoringBackoffTests`, `MonitoringStatusRegistryTests` (Retrying → Degraded → Healthy), `ProcessMonitoringServiceTests` (interval widens on repeated failure, restores on success) |
+| Budgets measured | 🔨 self-metrics section added; ~7-minute in-session soak: CPU negligible, WAL growth ~0.4 MB/min (under the 1 MB/min budget). **Working set ~230–270 MB exceeds the 150 MB budget** — a WinUI 3 runtime-baseline reality; flagged for Phase 14 |
+| No leaks over 24 h | ⏳ **manual — Phase 14 QA** (not runnable in-session; working set appeared to plateau near 267 MB over ~7 min) |
+| No frame > 16 ms attributable to monitoring | 🔨 UI updates already coalesce to 1 Hz (Phase 10); frame profiling deferred to Phase 14 |
+| Solution builds, Debug and Release | ✅ 0 errors, 0 warnings |
+| Unit + Simulation + Integration tests | ✅ 360 passing (270 + 37 + 53) |
+
+**Deviations from plan**
+
+- **The 24-hour soak and frame-time profiling are deferred to Phase 14 QA** — not
+  runnable in this session. Phase 13 ships the mechanism, the self-metrics
+  surface, and a short in-session soak.
+- **Working set exceeds the §1 150 MB budget** (~230–270 MB with the window open)
+  — the WinUI 3 / WindowsAppSDK runtime baseline is most of it. Recorded honestly
+  in the footprint section; a real reduction (if feasible) is Phase 14/15 work,
+  and the budget number itself may need revising for the platform.
+- **"Chart feed suspended when hidden" is a ViewModel-side skip**, not a hard stop
+  of the monitoring service — DB sampling continues.
+- **`Monitoring.Paused` is honoured but has no Settings toggle yet** — the wiring
+  is complete; the UI control is a later addition.
+- **`Retrying` vs `Degraded` stays a fixed count threshold**; the backoff interval
+  is the exponential part.
 
 ---
 
