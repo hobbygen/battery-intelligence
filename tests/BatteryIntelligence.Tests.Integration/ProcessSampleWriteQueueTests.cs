@@ -1,5 +1,6 @@
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Models;
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Data;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -18,7 +19,7 @@ public sealed class ProcessSampleWriteQueueTests
         using TempDatabase db = new();
         await db.MigrateAsync();
 
-        ProcessSampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<ProcessSampleWriteQueue>.Instance);
+        ProcessSampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<ProcessSampleWriteQueue>.Instance, new MonitoringStatusRegistry());
 
         queue.Enqueue(Batch(sessionId: null,
             new ProcessSampleRecord(0, "Google Chrome", "chrome", 22.5, 800_000_000, true, 1_240, 34.2),
@@ -44,7 +45,7 @@ public sealed class ProcessSampleWriteQueueTests
         using TempDatabase db = new();
         await db.MigrateAsync();
 
-        ProcessSampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<ProcessSampleWriteQueue>.Instance);
+        ProcessSampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<ProcessSampleWriteQueue>.Instance, new MonitoringStatusRegistry());
 
         for (int i = 0; i < 210; i++)
         {
@@ -63,7 +64,7 @@ public sealed class ProcessSampleWriteQueueTests
         using TempDatabase db = new();
         await db.MigrateAsync();
 
-        ProcessSampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<ProcessSampleWriteQueue>.Instance);
+        ProcessSampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<ProcessSampleWriteQueue>.Instance, new MonitoringStatusRegistry());
         queue.Enqueue(new ProcessSampleBatch(DateTimeOffset.UtcNow, null, "AppEnergyV1", []));
         await queue.FlushAsync();
 

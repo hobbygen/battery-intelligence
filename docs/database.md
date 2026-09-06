@@ -370,6 +370,7 @@ from the snapshot being viewed, including which factors were unavailable.
 ### Aggregates
 
 ```sql
+-- V002 adds: CREATE INDEX IX_SampleMinute_Time ON SampleMinute(MinuteUtc);
 CREATE TABLE SampleMinute (
     BatteryId       INTEGER NOT NULL REFERENCES BatteryDevice(Id),
     MinuteUtc       INTEGER NOT NULL,
@@ -490,12 +491,22 @@ samples alone would exceed 1.8 GB per year — the concrete reason spec §31 exi
 Sequential, forward-only, each in a transaction:
 
 ```
-V001__InitialSchema.sql
-V002__...
+V001__InitialSchema.sql       — the 18 tables and their indexes
+V002__AggregateTimeIndexes.sql — IX_SampleMinute_Time, IX_SampleHour_Time
 ```
 
-Runner: read `SchemaMigration`, apply every embedded script with a higher version
-in order, record each. Rules per spec §64:
+**V002 (Phase 14).** `SampleMinute` and `SampleHour` are `WITHOUT ROWID` with
+`PRIMARY KEY (BatteryId, <time>)`. The History page's minute/hour tier reads
+filter on the time column *alone* (no `BatteryId`), so the primary key cannot
+help and SQLite scanned the whole table. V002 adds a plain index on `MinuteUtc` /
+`HourUtc`; the reads are now range searches. Purely additive (`CREATE INDEX IF NOT
+EXISTS`), no table rebuild. It is also the first migration to exercise
+backup-before-migration (`battery.db.bak-v002`) — see R-066. Query plans are
+asserted by `QueryPlanTests`.
+
+Runner: read `SchemaMigration`, run `PRAGMA quick_check` (a corrupt file aborts
+the run without being touched — Phase 14), apply every embedded script with a
+higher version in order, record each. Rules per spec §64:
 
 - Never drop or rewrite a user-data column destructively.
 - Additive changes preferred; a table rebuild must copy all existing rows.

@@ -44,6 +44,7 @@
                             <controls:Segmented
                                 Grid.Column="2"
                                 VerticalAlignment="Center"
+                                AutomationProperties.Name="Theme"
                                 ItemsSource="{x:Bind ViewModel.ThemeOptions}"
                                 SelectedIndex="{x:Bind ViewModel.SelectedThemeIndex, Mode=TwoWay}" />
                         </Grid>
@@ -62,6 +63,7 @@
                             <controls:Segmented
                                 Grid.Column="2"
                                 VerticalAlignment="Center"
+                                AutomationProperties.Name="Density"
                                 ItemsSource="{x:Bind ViewModel.DensityOptions}"
                                 SelectedIndex="{x:Bind ViewModel.SelectedDensityIndex, Mode=TwoWay}" />
                         </Grid>

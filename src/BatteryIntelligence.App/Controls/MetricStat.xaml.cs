@@ -29,6 +29,10 @@ public sealed partial class MetricStat : UserControl
         nameof(ValueBrush), typeof(Brush), typeof(MetricStat),
         new PropertyMetadata(null, OnValueBrushChanged));
 
+    public static readonly DependencyProperty InfoTextProperty = DependencyProperty.Register(
+        nameof(InfoText), typeof(string), typeof(MetricStat),
+        new PropertyMetadata(string.Empty, OnInfoTextChanged));
+
     public MetricStat()
     {
         InitializeComponent();
@@ -70,6 +74,13 @@ public sealed partial class MetricStat : UserControl
         set => SetValue(ValueBrushProperty, value);
     }
 
+    /// <summary>One sentence of provenance shown on an ⓘ hover beside the value (R-095). Empty hides it.</summary>
+    public string InfoText
+    {
+        get => (string)GetValue(InfoTextProperty);
+        set => SetValue(InfoTextProperty, value);
+    }
+
     private static void OnUnitChanged(DependencyObject d, DependencyPropertyChangedEventArgs e) =>
         ((MetricStat)d).UnitText.Visibility = string.IsNullOrEmpty(e.NewValue as string)
             ? Visibility.Collapsed : Visibility.Visible;
@@ -81,6 +92,14 @@ public sealed partial class MetricStat : UserControl
     private static void OnBadgeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e) =>
         ((MetricStat)d).BadgeBorder.Visibility = string.IsNullOrEmpty(e.NewValue as string)
             ? Visibility.Collapsed : Visibility.Visible;
+
+    private static void OnInfoTextChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var stat = (MetricStat)d;
+        string text = e.NewValue as string ?? string.Empty;
+        stat.Info.Text = text;
+        stat.Info.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
+    }
 
     private static void OnValueBrushChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {

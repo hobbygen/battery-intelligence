@@ -73,7 +73,8 @@
                             <controls:MetricStat
                                 Label="Current"
                                 Value="{x:Bind ViewModel.CurrentMetric.Live, Mode=OneWay}"
-                                BadgeText="{x:Bind ViewModel.CurrentMetric.BadgeText, Mode=OneWay}" />
+                                BadgeText="{x:Bind ViewModel.CurrentMetric.BadgeText, Mode=OneWay}"
+                                InfoText="Current is not measured directly — it is calculated as power ÷ voltage, guarded against an implausible voltage reading." />
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -89,6 +90,7 @@
                             </Grid.ColumnDefinitions>
                             <controls:Segmented
                                 Grid.Column="0"
+                                AutomationProperties.Name="Chart metric"
                                 ItemsSource="{x:Bind ViewModel.MetricTabs}"
                                 SelectedIndex="{x:Bind ViewModel.SelectedMetricTab, Mode=TwoWay}" />
                             <ComboBox

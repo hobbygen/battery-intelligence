@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 
 namespace BatteryIntelligence.App.Controls;
@@ -7,7 +8,7 @@ namespace BatteryIntelligence.App.Controls;
 public sealed partial class ToggleRow : UserControl
 {
     public static readonly DependencyProperty HeaderProperty = DependencyProperty.Register(
-        nameof(Header), typeof(string), typeof(ToggleRow), new PropertyMetadata(string.Empty));
+        nameof(Header), typeof(string), typeof(ToggleRow), new PropertyMetadata(string.Empty, OnHeaderChanged));
 
     public static readonly DependencyProperty DescriptionProperty = DependencyProperty.Register(
         nameof(Description), typeof(string), typeof(ToggleRow), new PropertyMetadata(string.Empty));
@@ -38,6 +39,14 @@ public sealed partial class ToggleRow : UserControl
     {
         get => (bool)GetValue(IsOnProperty);
         set => SetValue(IsOnProperty, value);
+    }
+
+    private static void OnHeaderChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        // The inner ToggleSwitch has no visible label of its own, so give it the
+        // header as its accessible name (R-092).
+        ToggleRow row = (ToggleRow)d;
+        AutomationProperties.SetName(row.Switch, e.NewValue as string ?? string.Empty);
     }
 
     private static void OnIsOnChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

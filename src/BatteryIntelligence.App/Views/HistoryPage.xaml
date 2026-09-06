@@ -36,11 +36,13 @@
                             <controls:Segmented
                                 Grid.Column="0"
                                 HorizontalAlignment="Left"
+                                AutomationProperties.Name="Metric"
                                 ItemsSource="{x:Bind ViewModel.MetricOptions}"
                                 SelectedIndex="{x:Bind ViewModel.SelectedMetricIndex, Mode=TwoWay}" />
                             <controls:Segmented
                                 Grid.Column="1"
                                 HorizontalAlignment="Right"
+                                AutomationProperties.Name="Time range"
                                 ItemsSource="{x:Bind ViewModel.RangeOptions}"
                                 SelectedIndex="{x:Bind ViewModel.SelectedRangeIndex, Mode=TwoWay}" />
                         </Grid>

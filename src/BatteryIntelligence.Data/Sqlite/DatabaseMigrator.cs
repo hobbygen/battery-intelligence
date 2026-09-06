@@ -63,6 +63,18 @@ public sealed class DatabaseMigrator
         {
             await using SqliteConnection connection = await _connectionFactory.OpenAsync(cancellationToken).ConfigureAwait(false);
 
+            if (!await PassesIntegrityCheckAsync(connection, cancellationToken).ConfigureAwait(false))
+            {
+                // A corrupt database must NOT be "repaired" by deleting it — months
+                // of battery history is the most valuable thing the app holds
+                // (docs/testing.md section 5). The app runs without persistence
+                // this session; Diagnostics shows the write path Degraded.
+                _logger.LogError(
+                    "Database failed its integrity check. The file has NOT been modified. " +
+                    "History recording is paused this session — see Diagnostics.");
+                return false;
+            }
+
             int currentVersion = await GetCurrentVersionAsync(connection, cancellationToken).ConfigureAwait(false);
 
             foreach (Migration migration in migrations.Where(m => m.Version > currentVersion).OrderBy(m => m.Version))
@@ -85,6 +97,27 @@ public sealed class DatabaseMigrator
         catch (Exception ex) when (ex is SqliteException or IOException or UnauthorizedAccessException)
         {
             _logger.LogError(ex, "Database migration failed; the application will run without persistence this session.");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Runs <c>PRAGMA quick_check</c> — a fast, page-level structural check that
+    /// catches a truncated or overwritten file without the full <c>integrity_check</c>
+    /// scan. A brand-new (empty) database passes.
+    /// </summary>
+    private async Task<bool> PassesIntegrityCheckAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using SqliteCommand check = connection.CreateCommand();
+            check.CommandText = "PRAGMA quick_check(1);";
+            object? result = await check.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            return result is "ok";
+        }
+        catch (SqliteException ex)
+        {
+            _logger.LogError(ex, "Database integrity check could not run.");
             return false;
         }
     }

@@ -6,12 +6,15 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    MinHeight="40">
+    MinHeight="40"
+    AutomationProperties.AccessibilityView="Raw">
 
     <!--
         A dependency-free mini trend line (no charting library). A Canvas host so
         the child shapes never feed back into layout (a Polyline that measured to
         its own points would loop). Points are recomputed on size or data change.
+        Decorative: the figure it illustrates is always shown as text beside it,
+        so it is hidden from the accessibility tree (R-092).
     -->
     <Canvas x:Name="Host" SizeChanged="OnHostSizeChanged" Background="Transparent">
         <Polygon x:Name="FillShape" Visibility="Collapsed" />

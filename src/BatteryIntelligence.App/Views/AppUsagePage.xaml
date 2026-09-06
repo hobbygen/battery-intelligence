@@ -127,6 +127,7 @@
                                 ActionInvoked="OnMethodologyAction" />
                             <controls:Segmented
                                 Grid.Column="1"
+                                AutomationProperties.Name="Time window"
                                 ItemsSource="{x:Bind ViewModel.WindowOptions}"
                                 SelectedIndex="{x:Bind ViewModel.SelectedWindowIndex, Mode=TwoWay}" />
                         </Grid>
@@ -151,6 +152,7 @@
                             <controls:CardHeader Grid.Column="0" Glyph="&#xE9D9;" Text="BY APPLICATION" />
                             <controls:Segmented
                                 Grid.Column="1"
+                                AutomationProperties.Name="Sort order"
                                 ItemsSource="{x:Bind ViewModel.SortOptions}"
                                 SelectedIndex="{x:Bind ViewModel.SelectedSortIndex, Mode=TwoWay}" />
                         </Grid>

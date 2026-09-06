@@ -1,4 +1,5 @@
 using BatteryIntelligence.Core.Models;
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Data;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -11,10 +12,10 @@ public sealed class DatabaseDiagnosticsProviderTests
     public async Task GetDiagnosticsAsync_BeforeMigration_ReportsDoesNotExist()
     {
         using TempDatabase db = new();
-        BatterySampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<BatterySampleWriteQueue>.Instance);
-        PowerSampleWriteQueue powerQueue = new(db.ConnectionFactory, NullLogger<PowerSampleWriteQueue>.Instance);
-        TemperatureSampleWriteQueue temperatureQueue = new(db.ConnectionFactory, NullLogger<TemperatureSampleWriteQueue>.Instance);
-        ProcessSampleWriteQueue processQueue = new(db.ConnectionFactory, NullLogger<ProcessSampleWriteQueue>.Instance);
+        BatterySampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<BatterySampleWriteQueue>.Instance, new MonitoringStatusRegistry());
+        PowerSampleWriteQueue powerQueue = new(db.ConnectionFactory, NullLogger<PowerSampleWriteQueue>.Instance, new MonitoringStatusRegistry());
+        TemperatureSampleWriteQueue temperatureQueue = new(db.ConnectionFactory, NullLogger<TemperatureSampleWriteQueue>.Instance, new MonitoringStatusRegistry());
+        ProcessSampleWriteQueue processQueue = new(db.ConnectionFactory, NullLogger<ProcessSampleWriteQueue>.Instance, new MonitoringStatusRegistry());
         DatabaseDiagnosticsProvider provider = new(db.ConnectionFactory, queue, powerQueue, temperatureQueue, processQueue, NullLogger<DatabaseDiagnosticsProvider>.Instance);
 
         DatabaseDiagnostics diagnostics = await provider.GetDiagnosticsAsync();
@@ -29,10 +30,10 @@ public sealed class DatabaseDiagnosticsProviderTests
         using TempDatabase db = new();
         await db.MigrateAsync();
 
-        BatterySampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<BatterySampleWriteQueue>.Instance);
-        PowerSampleWriteQueue powerQueue = new(db.ConnectionFactory, NullLogger<PowerSampleWriteQueue>.Instance);
-        TemperatureSampleWriteQueue temperatureQueue = new(db.ConnectionFactory, NullLogger<TemperatureSampleWriteQueue>.Instance);
-        ProcessSampleWriteQueue processQueue = new(db.ConnectionFactory, NullLogger<ProcessSampleWriteQueue>.Instance);
+        BatterySampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<BatterySampleWriteQueue>.Instance, new MonitoringStatusRegistry());
+        PowerSampleWriteQueue powerQueue = new(db.ConnectionFactory, NullLogger<PowerSampleWriteQueue>.Instance, new MonitoringStatusRegistry());
+        TemperatureSampleWriteQueue temperatureQueue = new(db.ConnectionFactory, NullLogger<TemperatureSampleWriteQueue>.Instance, new MonitoringStatusRegistry());
+        ProcessSampleWriteQueue processQueue = new(db.ConnectionFactory, NullLogger<ProcessSampleWriteQueue>.Instance, new MonitoringStatusRegistry());
         DatabaseDiagnosticsProvider provider = new(db.ConnectionFactory, queue, powerQueue, temperatureQueue, processQueue, NullLogger<DatabaseDiagnosticsProvider>.Instance);
 
         await db.ExecuteAsync(

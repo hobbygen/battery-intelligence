@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="BatteryIntelligence.App.Controls.InfoDot"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <!-- An "i" glyph whose tooltip and accessible name both carry one sentence of
+         provenance for a nearby figure (R-095). Sighted users hover; a screen
+         reader reads the same text. -->
+    <FontIcon
+        x:Name="Icon"
+        FontSize="13"
+        VerticalAlignment="Center"
+        Foreground="{ThemeResource AppText3Brush}"
+        Glyph="&#xE946;"
+        IsTapEnabled="True">
+        <ToolTipService.ToolTip>
+            <ToolTip x:Name="Tip" MaxWidth="320" />
+        </ToolTipService.ToolTip>
+    </FontIcon>
+
+</UserControl>

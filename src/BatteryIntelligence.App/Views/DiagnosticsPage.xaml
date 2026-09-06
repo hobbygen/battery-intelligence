@@ -106,6 +106,7 @@
                             <controls:Segmented
                                 Grid.Column="0"
                                 HorizontalAlignment="Left"
+                                AutomationProperties.Name="Log level filter"
                                 ItemsSource="{x:Bind ViewModel.LogLevelOptions}"
                                 SelectedIndex="{x:Bind ViewModel.SelectedLogLevelIndex, Mode=TwoWay}" />
                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">

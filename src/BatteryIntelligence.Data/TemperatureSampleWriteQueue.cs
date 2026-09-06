@@ -1,3 +1,4 @@
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Interfaces;
 using BatteryIntelligence.Core.Models;
@@ -29,6 +30,7 @@ public sealed class TemperatureSampleWriteQueue : ITemperatureSampleWriteQueue, 
     private readonly BatteryDeviceRepository _deviceRepository = new();
     private readonly TemperatureSampleRepository _sampleRepository = new();
     private readonly ILogger<TemperatureSampleWriteQueue> _logger;
+    private readonly IMonitoringStatusRegistry _status;
     private readonly Lock _gate = new();
     private readonly List<PendingSample> _pending = [];
     private readonly SemaphoreSlim _flushGate = new(1, 1);
@@ -37,13 +39,18 @@ public sealed class TemperatureSampleWriteQueue : ITemperatureSampleWriteQueue, 
 
     private Timer? _timer;
 
-    public TemperatureSampleWriteQueue(ISqliteConnectionFactory connectionFactory, ILogger<TemperatureSampleWriteQueue> logger)
+    public TemperatureSampleWriteQueue(
+        ISqliteConnectionFactory connectionFactory,
+        ILogger<TemperatureSampleWriteQueue> logger,
+        IMonitoringStatusRegistry status)
     {
         ArgumentNullException.ThrowIfNull(connectionFactory);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(status);
 
         _connectionFactory = connectionFactory;
         _logger = logger;
+        _status = status;
     }
 
     public int PendingCount
@@ -136,6 +143,7 @@ public sealed class TemperatureSampleWriteQueue : ITemperatureSampleWriteQueue, 
             catch (Exception ex) when (ex is SqliteException or IOException or UnauthorizedAccessException)
             {
                 _logger.LogError(ex, "Failed to flush {Count} temperature sample(s); will retry.", batch.Count);
+                _status.ReportFailure(MonitoringComponent.Database, ex.Message);
                 lock (_gate)
                 {
                     _pending.InsertRange(0, batch);

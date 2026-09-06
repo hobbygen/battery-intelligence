@@ -1,6 +1,7 @@
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Models;
 using BatteryIntelligence.Core.Primitives;
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Data;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -20,7 +21,7 @@ public sealed class BatterySampleWriteQueueTests
         using TempDatabase db = new();
         await db.MigrateAsync();
 
-        BatterySampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<BatterySampleWriteQueue>.Instance);
+        BatterySampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<BatterySampleWriteQueue>.Instance, new MonitoringStatusRegistry());
 
         queue.Enqueue(MakeSnapshot("battery0", 84.0));
         await queue.FlushAsync();
@@ -42,7 +43,7 @@ public sealed class BatterySampleWriteQueueTests
         using TempDatabase db = new();
         await db.MigrateAsync();
 
-        BatterySampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<BatterySampleWriteQueue>.Instance);
+        BatterySampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<BatterySampleWriteQueue>.Instance, new MonitoringStatusRegistry());
 
         for (int i = 0; i < 200; i++)
         {
@@ -62,7 +63,7 @@ public sealed class BatterySampleWriteQueueTests
         using TempDatabase db = new();
         await db.MigrateAsync();
 
-        BatterySampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<BatterySampleWriteQueue>.Instance);
+        BatterySampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<BatterySampleWriteQueue>.Instance, new MonitoringStatusRegistry());
 
         BatterySnapshot real = MakeSnapshot("battery0", 70.0);
         BatterySnapshot aggregate = real with
@@ -87,7 +88,7 @@ public sealed class BatterySampleWriteQueueTests
         using TempDatabase db = new();
         await db.MigrateAsync();
 
-        BatterySampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<BatterySampleWriteQueue>.Instance);
+        BatterySampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<BatterySampleWriteQueue>.Instance, new MonitoringStatusRegistry());
         queue.Enqueue(MakeSnapshot("battery0", 60.0));
 
         await queue.FlushAsync();

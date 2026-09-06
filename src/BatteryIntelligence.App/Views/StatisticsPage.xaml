@@ -74,6 +74,7 @@
 
                 <controls:Segmented
                     HorizontalAlignment="Left"
+                    AutomationProperties.Name="Time window"
                     ItemsSource="{x:Bind ViewModel.WindowOptions}"
                     SelectedIndex="{x:Bind ViewModel.SelectedWindowIndex, Mode=TwoWay}" />
 

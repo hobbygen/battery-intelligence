@@ -77,6 +77,7 @@ public partial class App : Application
     {
         _ = args;
 
+        long startTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
         _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
 
         _host = BuildHost();
@@ -130,6 +131,12 @@ public partial class App : Application
         {
             _window.Activate();
         }
+
+        // Cold-start budget is < 2 s to interactive (docs/monitoring-dataflow.md
+        // §1 / prd.md §6). This measures build-host → migrate → window-activate.
+        Log.Information(
+            "Application ready in {ElapsedMs} ms.",
+            (int)System.Diagnostics.Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
     }
 
     /// <summary>

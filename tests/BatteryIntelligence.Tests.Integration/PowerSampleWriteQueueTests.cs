@@ -1,6 +1,7 @@
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Models;
 using BatteryIntelligence.Core.Primitives;
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Data;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -19,7 +20,7 @@ public sealed class PowerSampleWriteQueueTests
         using TempDatabase db = new();
         await db.MigrateAsync();
 
-        PowerSampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<PowerSampleWriteQueue>.Instance);
+        PowerSampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<PowerSampleWriteQueue>.Instance, new MonitoringStatusRegistry());
 
         queue.Enqueue(Device("battery0"), Reading("battery0", powerMw: -6_332, voltageMv: 11_791));
         await queue.FlushAsync();
@@ -43,7 +44,7 @@ public sealed class PowerSampleWriteQueueTests
         using TempDatabase db = new();
         await db.MigrateAsync();
 
-        PowerSampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<PowerSampleWriteQueue>.Instance);
+        PowerSampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<PowerSampleWriteQueue>.Instance, new MonitoringStatusRegistry());
 
         for (int i = 0; i < 200; i++)
         {
@@ -62,7 +63,7 @@ public sealed class PowerSampleWriteQueueTests
         using TempDatabase db = new();
         await db.MigrateAsync();
 
-        PowerSampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<PowerSampleWriteQueue>.Instance);
+        PowerSampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<PowerSampleWriteQueue>.Instance, new MonitoringStatusRegistry());
 
         queue.Enqueue(Device("battery0"), Reading("battery0", -6_000, 11_800));
         queue.Enqueue(Device(BatteryDevice.AggregateHardwareId), Reading(BatteryDevice.AggregateHardwareId, -6_000, 11_800));
@@ -81,7 +82,7 @@ public sealed class PowerSampleWriteQueueTests
         using TempDatabase db = new();
         await db.MigrateAsync();
 
-        PowerSampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<PowerSampleWriteQueue>.Instance);
+        PowerSampleWriteQueue queue = new(db.ConnectionFactory, NullLogger<PowerSampleWriteQueue>.Instance, new MonitoringStatusRegistry());
 
         PowerReading estimated = new()
         {

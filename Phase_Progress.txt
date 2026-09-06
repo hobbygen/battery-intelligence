@@ -6,16 +6,17 @@ with exit criteria and deviations) and docs/traceability.md (requirement ->
 implementation -> test). This file is the fast orientation layer on top of those.
 
 ============================================================
-CURRENT STATUS: Phase 13 of 15 complete. Adaptive sampling +
-retry backoff shipped — AdaptiveSamplingPolicy (§3 table) drives
-the battery & process timers off screen/AC/charge-%/visibility/
-paused; MonitoringBackoff + Retrying state; ISelfMetrics footprint
-section on Diagnostics. 24h soak + working-set work → Phase 14.
-Ready to start Phase 14 (QA).
+CURRENT STATUS: Phase 14 of 15 complete. QA closure — failure-matrix
+tests (DatabaseFailureTests), corrupt-DB integrity check + write-queue
+Degraded reporting, V002 index migration (R-062/R-066), session
+timeline tests (R-047), accessibility pass (automation names,
+InfoDot for R-095), docs/security-review.md + docs/qa-checklist.md.
+Working-set-over-budget + 24h soak + Win10/screen-reader → checklist.
+Ready to start Phase 15 (Release).
 ============================================================
 
 Solution builds clean (0 warnings, 0 errors) in Debug and Release.
-Test totals: 360 passing — 270 Tests.Unit, 37 Tests.Simulation, 53 Tests.Integration.
+Test totals: 374 passing — 270 Tests.Unit, 37 Tests.Simulation, 67 Tests.Integration.
 Verified live on the reference machine (Dell laptop, Windows 11 build 26200,
 battery DELL 68ND307 / SMP / LiP, 40.0% retention — this is a real worn battery,
 not an error, and is documented as the reference reading in capability-matrix.md).
@@ -760,15 +761,70 @@ Key deviations (see docs/roadmap.md Phase 13):
 - Monitoring.Paused honoured but no Settings toggle yet.
 - Retrying vs Degraded stays a fixed count threshold; backoff is the exponential.
 
+PHASE 14 — QA (automatable closure; manual checklist produced)
+------------------------------------------------------------
+Closing every traceability.md gap a test can close; the rest is a checklist.
+
+What shipped:
+- Failure-matrix tests: tests/.../DatabaseFailureTests.cs — unreachable DB
+  (graceful, requeues, no loss), pending cap bounds memory, locked DB recovers
+  without a restart, reader+writer coexist under WAL, corrupt DB detected and
+  NEVER deleted.
+- Corrupt-DB hardening: DatabaseMigrator runs PRAGMA quick_check first (corrupt
+  -> returns false, file untouched, app runs without persistence). The 4 write
+  queues now ReportFailure(MonitoringComponent.Database) on a flush failure, so a
+  locked/full/corrupt DB shows Degraded in the Diagnostics Monitoring section.
+- R-047: tests/.../SessionTimelineTests.cs — GetTimelineAsync merge order,
+  range clip, empty range.
+- R-062/R-066: V002__AggregateTimeIndexes.sql (IX_SampleMinute_Time,
+  IX_SampleHour_Time — the tier reads scanned without them). QueryPlanTests
+  (EXPLAIN QUERY PLAN asserts index use). MigrationTests.LaterMigration... runs
+  a real V001->V002 with seeded rows: .bak-v002 written, zero row loss.
+- Accessibility (R-092/093/094): AutomationProperties.Name on every Segmented;
+  ToggleRow names its switch from Header; Sparkline marked decorative
+  (AccessibilityView=Raw); all 14 EmptyStateView uses carry a "why" (audited);
+  severity is always colour + icon + text.
+- R-095: Controls/InfoDot (i-glyph, tooltip AND accessible name);
+  MetricStat.InfoText DP; Battery (Current, runtime) + Power (Current) carry the
+  provenance sentence on hover.
+- R-100: docs/security-review.md — no admin, parameterised SQL (the 3
+  identifier-interpolating readers use closed hard-coded sets), safe paths, no
+  network, no secrets. Clean; no code change needed.
+- Measurement: App logs "Application ready in {ms}" — cold start ~1.0-1.4 s
+  (< 2 s budget). docs/qa-checklist.md is the manual matrix (hardware, Win10,
+  screen reader, 24h soak) with each row mapped to its §68 / Nx criterion.
+
+Verified live on the reference machine (2026-09-07): clean start on Dashboard
+and Diagnostics, no crash / LayoutCycle / errors; cold start 1013-1354 ms;
+Diagnostics footprint + Retrying label render fine. Builds clean Debug + Release;
+374 tests pass (270 + 37 + 67). The integration suite takes ~34 s (the locked-DB
+test waits out a 5 s busy_timeout) and has occasional SQLite-file-lock flakiness
+in the combined build+test run — re-run to confirm.
+
+IMPORTANT carry-overs to Phase 15 / release checklist:
+- Working set ~230-270 MB with the window open EXCEEDS the 150 MB budget
+  (WinUI 3 runtime baseline). Recorded in qa-checklist.md §F. Needs a real
+  reduction or a revised platform budget.
+- The 24h leak soak, Windows 10 rendering pass, real sleep/resume + charger
+  cycling, and the Narrator/keyboard-only pass are all in docs/qa-checklist.md
+  and require a human + a second machine.
+
+Key deviations (see docs/roadmap.md Phase 14):
+- Hardware/OS/soak checklist not executed (needs a human + Win10 box).
+- Corrupt-DB handling = integrity check + Degraded + honest log, not a full
+  app-wide read-only banner.
+- No VM state-selection unit tests — the App project (WinExe) can't be
+  referenced by a test project; the logic is trivial, content is audited.
+
 ============================================================
-WHAT'S NEXT: PHASE 14 — QA
+WHAT'S NEXT: PHASE 15 — Release
 ============================================================
-Per docs/roadmap.md: full unit/integration/simulation suites green; failure
-matrix (spec §62); manual checklist (testing.md §7) on Windows 10 and 11;
-accessibility pass; real sleep/resume and charger cycling. This is also where
-the 24h leak soak, frame-time profiling, and the working-set question from
-Phase 13 land.
-Exit: the twenty numbered criteria of spec §68 demonstrably satisfied.
+Per docs/roadmap.md: Release configuration with simulation excluded, MSIX
+packaging, versioning, install/upgrade/uninstall with user-data preservation
+verified, README, release notes, completed /docs set per spec §69. Also the
+home for the working-set investigation and running docs/qa-checklist.md.
+Exit: clean install, upgrade preserving the database, and uninstall all verified
+on a clean machine.
 
 ============================================================
 PROJECT STRUCTURE QUICK MAP (for when you do need to open files)
@@ -781,6 +837,12 @@ src/BatteryIntelligence.Core          — domain, zero dependencies, net10.0 (no
     ISelfMetrics (Phase 13 — footprint).
     Core.Monitoring (Phase 13): AdaptiveSamplingPolicy (§3 table), MonitoringBackoff.
     Core.Interfaces.IAppVisibilityState (Phase 13 — window show/hide seam).
+    Core.Diagnostics.MonitoringHealth gained Retrying (Phase 13).
+src/BatteryIntelligence.Data/Sqlite/Migrations/ — V001__InitialSchema.sql,
+    V002__AggregateTimeIndexes.sql (Phase 14). DatabaseMigrator runs
+    PRAGMA quick_check before applying anything.
+docs/qa-checklist.md — the manual release matrix (Phase 14). Run per RC.
+docs/security-review.md — R-100 audit (Phase 14). Clean.
 src/BatteryIntelligence.Windows       — Win32/WinRT interop, message window
     (now emits Suspended/Resumed/ScreenStateChanged/LockStateChanged too)
 src/BatteryIntelligence.Battery       — providers, capability detection, monitoring service
@@ -812,6 +874,7 @@ src/BatteryIntelligence.Reporting — CsvExporter + JsonExporter behind
 src/BatteryIntelligence.App           — WinUI 3 shell, Views, ViewModels, composition root (App.xaml.cs).
     Resources/AppTheme.xaml holds the Claude Design tokens; Controls/{Segmented,
     CardHeader,MetricStat,Sparkline,ToggleRow,ColumnGrid} are the design primitives;
+    Controls/{InfoDot} (Phase 14) — the per-value estimation-hover affordance;
     Controls/PowerChart is the only file touching LiveChartsCore;
     Services/WindowsToastPresenter is the only file touching AppNotificationManager;
     Services/ExportService is the only file touching the file-save picker;

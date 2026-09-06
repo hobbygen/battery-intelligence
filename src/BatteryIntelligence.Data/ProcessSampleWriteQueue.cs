@@ -1,3 +1,4 @@
+using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Core.Interfaces;
 using BatteryIntelligence.Core.Models;
 using BatteryIntelligence.Data.Repositories;
@@ -29,19 +30,25 @@ public sealed class ProcessSampleWriteQueue : IProcessSampleWriteQueue, IHostedS
     private readonly ISqliteConnectionFactory _connectionFactory;
     private readonly ProcessSampleRepository _repository = new();
     private readonly ILogger<ProcessSampleWriteQueue> _logger;
+    private readonly IMonitoringStatusRegistry _status;
     private readonly Lock _gate = new();
     private readonly List<ProcessSampleRow> _pending = [];
     private readonly SemaphoreSlim _flushGate = new(1, 1);
 
     private Timer? _timer;
 
-    public ProcessSampleWriteQueue(ISqliteConnectionFactory connectionFactory, ILogger<ProcessSampleWriteQueue> logger)
+    public ProcessSampleWriteQueue(
+        ISqliteConnectionFactory connectionFactory,
+        ILogger<ProcessSampleWriteQueue> logger,
+        IMonitoringStatusRegistry status)
     {
         ArgumentNullException.ThrowIfNull(connectionFactory);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(status);
 
         _connectionFactory = connectionFactory;
         _logger = logger;
+        _status = status;
     }
 
     public int PendingCount
@@ -145,6 +152,7 @@ public sealed class ProcessSampleWriteQueue : IProcessSampleWriteQueue, IHostedS
             catch (Exception ex) when (ex is SqliteException or IOException or UnauthorizedAccessException)
             {
                 _logger.LogError(ex, "Failed to flush {Count} process sample row(s); will retry.", batch.Count);
+                _status.ReportFailure(MonitoringComponent.Database, ex.Message);
                 lock (_gate)
                 {
                     _pending.InsertRange(0, batch);

@@ -106,6 +106,7 @@
                             <controls:CardHeader Grid.Column="0" Glyph="&#xE9CA;" Text="BATTERY TEMPERATURE" />
                             <controls:Segmented
                                 Grid.Column="1"
+                                AutomationProperties.Name="Time window"
                                 ItemsSource="{x:Bind ViewModel.WindowOptions}"
                                 SelectedIndex="{x:Bind ViewModel.SelectedWindowIndex, Mode=TwoWay}" />
                         </Grid>

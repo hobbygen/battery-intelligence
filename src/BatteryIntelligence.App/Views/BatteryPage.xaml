@@ -60,7 +60,8 @@
                         <StackPanel Orientation="Horizontal" Spacing="30">
                             <controls:MetricStat Label="Voltage" Value="{x:Bind Voltage.Text}" BadgeText="{x:Bind Voltage.BadgeText}" />
                             <controls:MetricStat Label="Power" Value="{x:Bind Power.Text}" BadgeText="{x:Bind Power.BadgeText}" />
-                            <controls:MetricStat Label="Current" Value="{x:Bind Current.Text}" BadgeText="{x:Bind Current.BadgeText}" />
+                            <controls:MetricStat Label="Current" Value="{x:Bind Current.Text}" BadgeText="{x:Bind Current.BadgeText}"
+                                InfoText="Current is calculated as power ÷ voltage — it is never read directly from the hardware." />
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -188,9 +189,11 @@
                         </StackPanel>
                         <StackPanel Visibility="{x:Bind ViewModel.RuntimeAvailable, Mode=OneWay}" Spacing="10">
                             <StackPanel Orientation="Horizontal" Spacing="30">
-                                <controls:MetricStat Label="At current usage" Value="{x:Bind ViewModel.RuntimeAtCurrent, Mode=OneWay}" />
+                                <controls:MetricStat Label="At current usage" Value="{x:Bind ViewModel.RuntimeAtCurrent, Mode=OneWay}"
+                                    InfoText="An estimate: remaining capacity ÷ a recency-weighted discharge rate. It moves as your usage changes." />
                                 <controls:MetricStat Label="Screen on" Value="{x:Bind ViewModel.RuntimeScreenOn, Mode=OneWay}" />
-                                <controls:MetricStat Label="Screen off" Value="{x:Bind ViewModel.RuntimeScreenOff, Mode=OneWay}" />
+                                <controls:MetricStat Label="Screen off" Value="{x:Bind ViewModel.RuntimeScreenOff, Mode=OneWay}"
+                                    InfoText="Shown only once real screen-off history exists — the display is usually the largest drain, so this is never extrapolated from the screen-on rate." />
                             </StackPanel>
                             <TextBlock Style="{StaticResource MetricLabelTextStyle}" TextWrapping="Wrap" Text="{x:Bind ViewModel.RuntimeConfidence, Mode=OneWay}" />
                         </StackPanel>

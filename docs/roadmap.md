@@ -1089,13 +1089,87 @@ budgets against.
 
 ---
 
-## Phase 14 — QA
+## Phase 14 — QA (automatable closure; manual checklist produced)
 
-**Deliverables:** full unit/integration/simulation suites green; failure matrix
-(spec §62) verified; manual checklist (`testing.md` §7) on Windows 10 and 11;
-accessibility pass; real sleep/resume and charger cycling.
+Closing every `traceability.md` gap a test can close, hardening the
+database-failure paths, an accessibility pass, and turning the hardware/soak
+requirements into a concrete release checklist.
 
-**Exit:** the twenty numbered criteria of spec §68 demonstrably satisfied.
+**What shipped:**
+
+- **Failure-matrix tests** — `DatabaseFailureTests` (integration): an unreachable
+  database degrades gracefully and requeues (no data loss), the pending cap
+  bounds memory, a locked database recovers without a restart, a reader and a
+  writer coexist under WAL, and a **corrupt database is detected and never
+  deleted**.
+- **Corrupt-DB hardening** — `DatabaseMigrator` runs `PRAGMA quick_check` before
+  touching anything; a failure returns `false` (the app runs without persistence
+  and says so on Diagnostics) rather than crashing or "repairing". The four write
+  queues now report `MonitoringComponent.Database` **Degraded** to the registry
+  on a flush failure, so a locked/full/corrupt database is visible in the
+  Diagnostics "Monitoring" section, not just the log.
+- **R-047** — `SessionTimelineTests`: `GetTimelineAsync` merges sessions, session
+  events and system events in chronological order and clips to the range.
+- **R-062 / R-066** — `V002__AggregateTimeIndexes.sql` adds `IX_SampleMinute_Time`
+  / `IX_SampleHour_Time` (the aggregate-tier history reads scanned without them).
+  `QueryPlanTests` runs `EXPLAIN QUERY PLAN` on the hot-path SELECTs and asserts
+  no full table scan. `MigrationTests.LaterMigration_BacksUpFirst_AndLosesNoRows`
+  finally exercises backup-before-migration on a real V001→V002 with seeded rows.
+- **R-092 / R-093 / R-094** (accessibility) — every `Segmented` got an
+  `AutomationProperties.Name`; `ToggleRow` names its inner switch from the header;
+  `Sparkline` is marked decorative (`AccessibilityView="Raw"`); the empty-state
+  audit confirmed all 14 `EmptyStateView` uses carry a "why"; severity is always
+  colour **+ icon + text** (verified). The page-header refresh buttons already
+  had names.
+- **R-095** — a reusable `Controls/InfoDot` (`ⓘ` glyph, tooltip **and**
+  accessible name). `MetricStat` gained an `InfoText` DP; the Battery page
+  (Current, runtime figures) and Power page (Current) now carry the provenance
+  sentence on hover.
+- **R-100** — `docs/security-review.md`: no admin, parameterised SQL (the three
+  identifier-interpolating readers use closed hard-coded sets, never input), safe
+  paths, no network, no secrets in logs. Clean; no code change needed.
+- **Measurement** — `App` logs `Application ready in {ms}`; cold start measured at
+  **~1.0–1.4 s** (< 2 s budget). `docs/qa-checklist.md` is the manual matrix for
+  everything a human/second machine must verify, each row mapped to its §68/`Nx`
+  criterion.
+
+**Depends on:** all prior phases.
+
+**Exit criteria:**
+
+| Criterion | Result |
+|---|---|
+| Unit + Simulation + Integration suites green | ✅ 374 passing (270 + 37 + 67) |
+| Failure matrix (spec §62) | ✅ automated column done (`DatabaseFailureTests` + existing simulation/session tests); manual confirmations in `qa-checklist.md` §E |
+| Migrations, no history loss (R-066) | ✅ `MigrationTests.LaterMigration…` — V001→V002 with data, backup written, zero row loss |
+| Indexed hot paths (R-062) | ✅ `QueryPlanTests` — every hot-path SELECT uses an index |
+| Session timeline (R-047) | ✅ `SessionTimelineTests` |
+| Accessibility (R-092/093/094) | ✅ automatable parts (names, decorative marks, empty-state audit, colour-not-alone); screen-reader + keyboard-only + high-contrast pass → `qa-checklist.md` §C |
+| Estimation transparency (R-095) | ✅ `InfoDot` on Battery + Power; dashboard + About already done |
+| Security review (R-100) | ✅ `docs/security-review.md` — clean |
+| Cold start < 2 s | ✅ ~1.0–1.4 s measured in-session |
+| Working set < 150 MB | ❌ ~230–270 MB (WinUI 3 baseline) — recorded in `qa-checklist.md` §F, carried to Phase 15 |
+| 24 h soak, Win10, real transitions, screen reader | ⏳ **manual — `qa-checklist.md`** (not runnable in this session) |
+| Builds Debug + Release, 0 warnings | ✅ |
+
+**Deviations from plan**
+
+- **The hardware / OS / soak checklist is not executed** — Windows 10 rendering, a
+  screen-reader pass, real sleep/resume + charger cycling and the 24-hour leak
+  soak need a human and a second machine. `docs/qa-checklist.md` enumerates them
+  with their §68 mapping; everything a test can close is closed.
+- **Corrupt-database handling is an integrity check + Degraded status + honest
+  log**, not a full app-wide read-only banner — the app keeps reading cached
+  state, writes degrade and surface, and the file is never deleted. A dedicated
+  read-only UI mode is deferred.
+- **Working set still exceeds the §1 150 MB budget** — the checklist records the
+  number; a real reduction (or a revised platform budget) is Phase 15.
+- **No ViewModel state-selection unit tests** — the App project (WinUI `WinExe`)
+  cannot be referenced by a test project, and the state logic is trivial boolean
+  composition. The empty-state *content* is audited; the *selection* is covered
+  by the live regression sweep.
+
+---
 
 ---
 
