@@ -66,6 +66,24 @@ First run:
 - "Start with Windows" (Settings) registers a Run-key shortcut for the
   unpackaged build.
 
+### Self-contained variant (no prerequisites)
+
+For a machine with **neither** .NET 10 nor the Windows App Runtime:
+
+```
+dotnet publish src/BatteryIntelligence.App/BatteryIntelligence.App.csproj `
+  -c Release -r win-x64 --self-contained true `
+  -p:WindowsAppSDKSelfContained=true -p:PublishReadyToRun=false `
+  --output dist/self-contained
+```
+
+Bundles the .NET runtime (`coreclr.dll`) and the Windows App SDK
+(`Microsoft.WindowsAppRuntime.dll`, `CoreMessagingXP.dll`, `Microsoft.ui.xaml.dll`).
+~247 MB on disk (~95 MB zipped) vs ~69 MB / ~22 MB for the framework-dependent
+build. Runs on any x64 Windows 10 17763+ with nothing pre-installed. This is the
+right artifact for a "download and run" release; the framework-dependent build is
+smaller when the target already has the runtimes (e.g. a dev box).
+
 ---
 
 ## 4. MSIX build
