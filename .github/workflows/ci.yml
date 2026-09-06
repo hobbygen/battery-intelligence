@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore BatteryIntelligence.slnx
+
+      # Directory.Build.props sets TreatWarningsAsErrors=true, so a warning fails here.
+      - name: Build (Debug)
+        run: dotnet build BatteryIntelligence.slnx -c Debug --no-restore
+
+      - name: Build (Release, unpackaged)
+        run: dotnet build BatteryIntelligence.slnx -c Release --no-restore
+
+      # The integration suite uses a real SQLite file per test and has occasional
+      # file-lock flakiness right after a build — retry once before failing.
+      - name: Test
+        shell: pwsh
+        run: |
+          dotnet test BatteryIntelligence.slnx -c Debug --no-build --verbosity minimal
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::warning::First test run failed; retrying once (known SQLite file-lock flakiness)."
+            dotnet test BatteryIntelligence.slnx -c Debug --no-build --verbosity minimal
+          }
+          exit $LASTEXITCODE
+
+      - name: No simulation code in Release binaries
+        shell: pwsh
+        run: ./tools/verify-no-simulation.ps1

@@ -1,5 +1,7 @@
 # Battery Intelligence
 
+[![CI](https://github.com/myplexlink-ops/battery-intelligence/actions/workflows/ci.yml/badge.svg)](https://github.com/myplexlink-ops/battery-intelligence/actions/workflows/ci.yml)
+
 A Windows desktop utility that tells you the truth about your laptop battery —
 health, power draw, what's draining it, and how long it will last — **locally**,
 with no account, no cloud, and no fabricated numbers.
