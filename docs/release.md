@@ -86,6 +86,68 @@ smaller when the target already has the runtimes (e.g. a dev box).
 
 ---
 
+## 3a. Setup.exe installer (recommended for "install on any laptop")
+
+A single self-contained, **machine-wide** installer built with Inno Setup 6 over
+the §3 self-contained publish. Runs on any x64 Windows 10 17763+ / 11 with
+**nothing pre-installed** — the .NET 10 runtime and the Windows App SDK are
+bundled. No code-signing certificate is needed to produce it (an unsigned
+installer shows a SmartScreen prompt on first run — "More info → Run anyway";
+sign it for a public release).
+
+One UAC prompt at install time (`PrivilegesRequired=admin`); the app itself
+still runs unelevated. The uninstall entry then shows in **both** the classic
+Control Panel → Programs and Features **and** Settings → Apps. (A per-user build —
+`PrivilegesRequired=lowest` — only shows in Settings → Apps; that was the 1.0.0
+first cut and was changed because users expect the Control Panel entry.)
+
+One-shot build:
+
+```
+winget install --id JRSoftware.InnoSetup      # once
+powershell -ExecutionPolicy Bypass -File tools/build-installer.ps1
+```
+
+That publishes self-contained, then compiles `tools/installer/BatteryIntelligence.iss`.
+
+Output: `dist/BatteryIntelligence-Setup-<version>.exe` (~67 MB) + `dist/SHA256SUMS.txt`.
+
+What it does on the target:
+- Installs to `C:\Program Files\Battery Intelligence` (override on the wizard's
+  directory page or with `/DIR=`).
+- All-users Start-menu shortcut; optional desktop shortcut (unticked by default).
+- Registers a machine-wide uninstall entry (classic Control Panel + Settings → Apps).
+- **Closes a running `BatteryIntelligence.exe` first** — on both install and
+  uninstall. The app minimises to the notification area, so a plain window close
+  is turned into a hide (`MainWindow.OnAppWindowClosing`); the installer therefore
+  `taskkill`s it (politely, then `/F`) in `PrepareToInstall` / `CurUninstallStepChanged`.
+  Without this the running exe locks its own files and the uninstall silently
+  leaves the folder and the tray icon behind.
+- `[UninstallDelete]` removes the whole `{app}` folder after the tracked files,
+  as a backstop against a late-clearing lock.
+- **Never creates or touches `%LOCALAPPDATA%\BatteryIntelligence`** (the database
+  + settings) — that stays the app's, and uninstall leaves it intact (spec §58).
+- "Start when I sign in" is left to the app's own Settings toggle, not the
+  installer.
+
+A `taskkill /F` can leave a **ghost tray icon** until the mouse passes over the
+notification area (Windows removes dead-process icons lazily) — cosmetic, clears
+on hover or next sign-in. Closing the app first (tray → Exit) avoids it.
+
+Silent install / uninstall (for imaging or scripted rollout — run elevated):
+
+```
+BatteryIntelligence-Setup-1.0.0.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+"C:\Program Files\Battery Intelligence\unins000.exe" /VERYSILENT
+```
+
+Verified 2026-09-08 on the reference machine (per-user test build): silent
+install → 525 files, shortcuts, uninstall key; silent uninstall **with the app
+running** → process killed, install dir and uninstall key removed,
+`%LOCALAPPDATA%\BatteryIntelligence` preserved.
+
+---
+
 ## 4. MSIX build
 
 Off by default; opt in with `EnablePackaging`:
@@ -191,4 +253,8 @@ a migration is later found to be faulty.
 - **The MSIX is authored but not built/signed/installed in-house** for the 1.0
   cut — no CA certificate. The manifest, build config, asset generator and this
   runbook are complete; §6 must be executed by whoever holds the cert.
-- **Distribution is unpackaged-first.** The zip is the primary, tested artifact.
+- **Distribution is unpackaged-first.** For "install on any laptop" the tested
+  artifact is the self-contained `Setup.exe` from §3a (no prerequisites,
+  machine-wide, one UAC prompt at install). The framework-dependent zip (§3)
+  stays the smallest option when the target already has the runtimes. The
+  MSIX (§4) is for whoever holds a cert.
