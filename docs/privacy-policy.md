@@ -17,7 +17,7 @@ nothing anywhere.
 
 You can verify this: the App requests no network capability, and its source code
 is public at
-`https://github.com/myplexlink-ops/battery-intelligence`.
+`https://github.com/hobbygen/battery-intelligence`.
 
 ## 2. What the application reads from your computer
 

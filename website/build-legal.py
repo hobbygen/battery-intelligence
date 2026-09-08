@@ -55,7 +55,7 @@ SHELL = """<!doctype html>
     <div class="foot-links">
       <a href="/terms.html">Terms of Use</a>
       <a href="/privacy.html">Privacy Policy</a>
-      <a href="https://github.com/myplexlink-ops/battery-intelligence">GitHub</a>
+      <a href="https://github.com/hobbygen/battery-intelligence">GitHub</a>
       <a href="mailto:awad.print@gmail.com">Contact</a>
     </div>
   </div>

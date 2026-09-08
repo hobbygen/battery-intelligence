@@ -847,7 +847,7 @@ POST-1.0 SHIP (2026-09-08): Setup.exe installer + branding + website.
   installer VersionInfo, About page. New app icon (generate-app-icon.ps1).
 - docs/terms-of-use.md + docs/privacy-policy.md (jurisdiction-neutral, contact
   awad.print@gmail.com). website/ = static marketing site.
-- Repo github.com/myplexlink-ops/battery-intelligence is now PUBLIC.
+- Repo github.com/hobbygen/battery-intelligence is now PUBLIC.
   GitHub Release v1.0.0 has the installer + self-contained zip + SHA256SUMS.
   Site: battery-intelligence.netlify.app (Netlify team "Naeem"/awad-print,
   site id 5138bbfb-7296-42f7-ba66-7efa5567e9e4).

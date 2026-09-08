@@ -1,6 +1,6 @@
 # Battery Intelligence
 
-[![CI](https://github.com/myplexlink-ops/battery-intelligence/actions/workflows/ci.yml/badge.svg)](https://github.com/myplexlink-ops/battery-intelligence/actions/workflows/ci.yml)
+[![CI](https://github.com/hobbygen/battery-intelligence/actions/workflows/ci.yml/badge.svg)](https://github.com/hobbygen/battery-intelligence/actions/workflows/ci.yml)
 
 A Windows desktop utility that tells you the truth about your laptop battery —
 health, power draw, what's draining it, and how long it will last — **locally**,
@@ -90,7 +90,7 @@ access is performed by the application, ever.
 ## Install
 
 Download `BatteryIntelligence-Setup-<version>.exe` from the
-[latest release](https://github.com/myplexlink-ops/battery-intelligence/releases/latest)
+[latest release](https://github.com/hobbygen/battery-intelligence/releases/latest)
 or the [website](https://battery-intelligence.netlify.app) and run it. It is a
 self-contained installer — no .NET, no Windows App Runtime, and no other
 prerequisite is needed. Windows 10 (build 1809 / 17763) or later, 64-bit.

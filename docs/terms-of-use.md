@@ -90,7 +90,7 @@ their respective owners.
 ## 8. Distribution and code signing
 
 Official builds are published only at
-`https://github.com/myplexlink-ops/battery-intelligence/releases` and linked from
+`https://github.com/hobbygen/battery-intelligence/releases` and linked from
 `https://battery-intelligence.netlify.app`. Builds obtained elsewhere may have
 been modified and are not covered by these terms. The installer may not be
 code-signed; Windows SmartScreen may warn you on first run. Verify the download
