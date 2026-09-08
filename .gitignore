@@ -21,6 +21,9 @@ coverage*.xml
 *.nupkg
 packages/
 
+# Netlify CLI local state (created by `netlify deploy`)
+.netlify/
+
 # OS
 Thumbs.db
 desktop.ini
