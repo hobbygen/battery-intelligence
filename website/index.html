@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Battery Intelligence — the truth about your laptop battery</title>
+<meta name="description" content="A free Windows app that shows your laptop battery health, power draw, what's draining it and how long it will last — locally, with no account and no fabricated numbers.">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Battery Intelligence">
+<meta property="og:description" content="Understand your laptop battery, power draw and health — locally, with no account and no fabricated numbers. Free for Windows 10 & 11.">
+<meta property="og:image" content="https://battery-intelligence.netlify.app/og-image.png">
+<meta property="og:url" content="https://battery-intelligence.netlify.app/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/icon-192.png" alt="">Battery Intelligence</a>
+    <nav class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/myplexlink-ops/battery-intelligence">Source</a>
+      <a class="nav-cta" href="#download">Download</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+<section class="hero" id="top">
+  <div class="wrap">
+    <img class="app-icon" src="/icon-512.png" alt="Battery Intelligence icon">
+    <h1>The truth about your laptop battery</h1>
+    <p class="lede">
+      Health, power draw, what's draining it, and how long it will really last —
+      shown clearly, computed on your own PC, with no account and no made-up numbers.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#download">↓ Download for Windows</a>
+      <a class="btn btn-ghost" href="#features">See what it does</a>
+    </div>
+    <p class="meta">Free &amp; open source · Windows 10 &amp; 11 (64-bit) · ~68&nbsp;MB · no prerequisites</p>
+  </div>
+</section>
+
+<div class="promise">
+  <div class="wrap">
+    <span class="badge">🎯</span>
+    <p>
+      <strong>It never guesses and calls it a fact.</strong> Every value is labelled
+      <span class="tag">Measured</span> read from the hardware,
+      <span class="tag">Calculated</span> derived with a disclosed method,
+      <span class="tag">Estimated</span> a documented, versioned model, or
+      <span class="tag">Unavailable</span> — the app says so and substitutes nothing.
+    </p>
+  </div>
+</div>
+
+<section id="features">
+  <div class="wrap">
+    <h2>What it shows you</h2>
+    <p class="sub">Nine screens, all driven by what <em>your</em> machine actually reports.</p>
+    <div class="feature-grid">
+
+      <div class="card">
+        <div class="ico">🔋</div>
+        <h3>Battery health</h3>
+        <p>Design vs full-charge capacity, a 0–100 health score weighted over the
+        factors your hardware can report, a Theil–Sen degradation trend, and a
+        90-day projection.</p>
+      </div>
+
+      <div class="card">
+        <div class="ico">⚡</div>
+        <h3>Power draw</h3>
+        <p>Live current, voltage and wattage with min / max / average over a
+        window you choose, on synchronised charts. Current is always P ÷ V —
+        calculated, never faked.</p>
+      </div>
+
+      <div class="card">
+        <div class="ico">📊</div>
+        <h3>App usage</h3>
+        <p>A ranked apportionment of the measured battery drain across your
+        applications (AppEnergyV1), with the non-attributable baseline shown
+        separately and every figure badged <em>Estimated</em>.</p>
+      </div>
+
+      <div class="card">
+        <div class="ico">⏱️</div>
+        <h3>Runtime estimate</h3>
+        <p>Time remaining split by screen-on and screen-off use, with a
+        confidence tier. Below the data floor it says “Calculating…”, never a
+        number it can't stand behind.</p>
+      </div>
+
+      <div class="card">
+        <div class="ico">🌡️</div>
+        <h3>Temperature</h3>
+        <p>Per-band time breakdown and threshold events — <em>where a sensor
+        exists</em>. Many laptops have none; the app tells you and collects
+        nothing rather than substituting CPU temperature.</p>
+      </div>
+
+      <div class="card">
+        <div class="ico">📅</div>
+        <h3>Sessions &amp; history</h3>
+        <p>Every charge and discharge session on a merged timeline of screen,
+        lock and sleep events — correct across sleep/resume and restarts. Charts
+        from 24 hours to a year, plus CSV / JSON export.</p>
+      </div>
+
+      <div class="card">
+        <div class="ico">🔔</div>
+        <h3>Alerts &amp; insights</h3>
+        <p>Configurable alerts with Windows toasts and an in-app centre, plus
+        confidence-gated, rule-based insights that only appear when the effect is
+        bigger than the noise.</p>
+      </div>
+
+      <div class="card">
+        <div class="ico">🔎</div>
+        <h3>Diagnostics</h3>
+        <p>A live capability matrix showing exactly which readings your machine
+        supports and where each figure comes from, per-subsystem health, a log
+        viewer and one-click “Copy report”.</p>
+      </div>
+
+      <div class="card">
+        <div class="ico">🪶</div>
+        <h3>Light on resources</h3>
+        <p>Adaptive sampling quiets the app when the screen is off, samples finer
+        below 20%, and stops entirely when paused — so watching your battery
+        doesn't drain it.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section id="how" class="banded">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="sub">No driver, no service, no elevation. Just standard Windows interfaces.</p>
+    <div class="steps">
+      <div class="step">
+        <div>
+          <h3>Reads your hardware directly</h3>
+          <p>Battery data from the ACPI / power-management interfaces, system
+          power and screen state, and the process list for app attribution — all
+          without administrator rights.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div>
+          <h3>Stores everything locally</h3>
+          <p>One SQLite database in <code>%LocalAppData%\BatteryIntelligence</code>.
+          You set retention, and you can export or wipe all history from Settings
+          at any time.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div>
+          <h3>Never talks to the internet</h3>
+          <p>The app makes no network requests of any kind — no account, no
+          cloud, no telemetry, no update check. You can verify it in the source.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <h2>Install</h2>
+    <p class="sub">A single self-contained installer. Nothing else to set up.</p>
+    <ul class="req-list">
+      <li>Windows 10 (build 1809 / 17763) or Windows 11, 64-bit</li>
+      <li>No .NET, no Windows App Runtime, no other prerequisite — it's all bundled</li>
+      <li>Installs for all users (one administrator prompt); the app itself runs without elevation</li>
+      <li>Appears in Control Panel and Settings → Apps like any normal program</li>
+      <li>Your battery history is kept outside the install folder, so it survives upgrades and uninstalls</li>
+    </ul>
+    <div class="note">
+      <strong>SmartScreen warning:</strong> the installer isn't code-signed yet, so
+      Windows shows a blue “Windows protected your PC” dialog on first run. Click
+      <strong>More info → Run anyway</strong>. You can verify the download against
+      the SHA-256 checksum shown below.
+    </div>
+  </div>
+</section>
+
+<section class="download-band" id="download">
+  <div class="wrap">
+    <h2>Download Battery Intelligence</h2>
+    <p class="sub center">Version 1.0.0 · Windows 10 &amp; 11 (64-bit) · 68 MB</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/myplexlink-ops/battery-intelligence/releases/download/v1.0.0/BatteryIntelligence-Setup-1.0.0.exe">
+        ↓ BatteryIntelligence-Setup-1.0.0.exe
+      </a>
+      <a class="btn btn-ghost" href="https://github.com/myplexlink-ops/battery-intelligence/releases">All releases</a>
+    </div>
+    <p class="hash">SHA-256: 8b88ed57ccc744bd2e1c728bb411d129b1b8989c9474277c2ba0d223aef23220</p>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div>
+      Battery Intelligence — an independent utility by <strong>Naeem Ahmad</strong>.<br>
+      Not affiliated with Microsoft or any hardware manufacturer. MIT licensed.
+    </div>
+    <div class="foot-links">
+      <a href="/terms.html">Terms of Use</a>
+      <a href="/privacy.html">Privacy Policy</a>
+      <a href="https://github.com/myplexlink-ops/battery-intelligence">GitHub</a>
+      <a href="mailto:awad.print@gmail.com">Contact</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

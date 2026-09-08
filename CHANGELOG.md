@@ -3,9 +3,21 @@
 All notable changes to Battery Intelligence. This project follows
 [Semantic Versioning](https://semver.org/).
 
-## 1.0.0 — 2026-09-07
+## 1.0.0 — 2026-09-08
 
-First release. Built over fifteen phases (see `docs/roadmap.md`); the highlights:
+First public release, by **Naeem Ahmad**. Built over fifteen phases (see
+`docs/roadmap.md`); the highlights:
+
+### Distribution
+
+- Self-contained, machine-wide **`Setup.exe`** installer (Inno Setup) — runs on
+  any 64-bit Windows 10 (1809+) / 11 with no prerequisites; shows in Control
+  Panel and Settings → Apps; installer and uninstaller close a running instance
+  first and never touch `%LocalAppData%\BatteryIntelligence`.
+- Application branded to Naeem Ahmad (icon, version info, MSIX publisher, About
+  page); new app icon from `branding/`.
+- Website (`battery-intelligence.netlify.app`) with features, usage and the
+  download link; `docs/terms-of-use.md` and `docs/privacy-policy.md`.
 
 ### Monitoring
 

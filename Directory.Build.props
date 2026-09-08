@@ -19,9 +19,9 @@
   -->
   <PropertyGroup>
     <Product>Battery Intelligence</Product>
-    <Company>Battery Intelligence</Company>
-    <Authors>Battery Intelligence</Authors>
-    <Copyright>Copyright © 2026 Battery Intelligence. MIT licensed.</Copyright>
+    <Company>Naeem Ahmad</Company>
+    <Authors>Naeem Ahmad</Authors>
+    <Copyright>Copyright © 2026 Naeem Ahmad. MIT licensed.</Copyright>
     <Version>1.0.0</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>

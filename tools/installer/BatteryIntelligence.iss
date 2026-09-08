@@ -27,7 +27,8 @@
 
 #define AppName "Battery Intelligence"
 #define AppVersion "1.0.0"
-#define AppPublisher "Battery Intelligence"
+#define AppPublisher "Naeem Ahmad"
+#define AppPublisherURL "https://battery-intelligence.netlify.app"
 #define AppExeName "BatteryIntelligence.exe"
 #define SourceDir "..\..\dist\self-contained"
 
@@ -37,7 +38,12 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
 AppPublisher={#AppPublisher}
+AppPublisherURL={#AppPublisherURL}
+AppSupportURL={#AppPublisherURL}
+AppUpdatesURL={#AppPublisherURL}
 VersionInfoVersion={#AppVersion}
+VersionInfoCompany={#AppPublisher}
+VersionInfoCopyright=Copyright (C) 2026 Naeem Ahmad. MIT licensed.
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
@@ -55,7 +61,6 @@ ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.17763
 LicenseFile=..\..\LICENSE
 AppReadmeFile={app}\README.md
-AppSupportURL=https://github.com/
 ; We close the app ourselves in [Code] (taskkill /F — it cannot be closed
 ; gracefully, it hides to tray instead), so leave Restart Manager out of it:
 ; its "please close this application" page can't succeed here and only confuses.

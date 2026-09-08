@@ -32,6 +32,7 @@
                     <StackPanel Grid.Column="1" Spacing="4">
                         <TextBlock Style="{StaticResource SecondaryMetricTextStyle}" Text="Battery Intelligence" />
                         <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="{x:Bind ViewModel.VersionLine}" />
+                        <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="By Naeem Ahmad" />
                         <TextBlock
                             Margin="0,10,0,0"
                             Foreground="{ThemeResource AppText2Brush}"
@@ -147,7 +148,7 @@
                             Grid.Column="1"
                             Foreground="{ThemeResource AppText2Brush}"
                             TextWrapping="Wrap"
-                            Text="No account required, no cloud synchronisation, no telemetry. All readings live in a single local SQLite database you can export or delete at any time from Settings." />
+                            Text="No account required, no cloud synchronisation, no telemetry. All readings live in a single local SQLite database you can export or delete at any time from Settings. Full Terms of Use and Privacy Policy: battery-intelligence.netlify.app" />
                     </Grid>
                 </Border>
             </StackPanel>
@@ -183,7 +184,7 @@
             <TextBlock
                 Foreground="{ThemeResource AppText3Brush}"
                 Style="{StaticResource CaptionTextBlockStyle}"
-                Text="Battery Intelligence is an independent utility and is not affiliated with Microsoft or any hardware manufacturer." />
+                Text="Battery Intelligence is an independent utility by Naeem Ahmad and is not affiliated with Microsoft or any hardware manufacturer." />
 
         </StackPanel>
     </ScrollViewer>

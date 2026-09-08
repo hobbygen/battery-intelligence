@@ -9,8 +9,8 @@
   <Version> in Directory.Build.props. Bump both together.
 
   The Publisher CN must match the code-signing certificate's subject
-  (docs/release.md §Signing). "CN=Battery Intelligence" is the development
-  placeholder.
+  (docs/release.md §Signing). "CN=Naeem Ahmad" matches a personal
+  code-signing certificate; change it if the cert's subject differs.
 -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
@@ -22,12 +22,12 @@
 
   <Identity
     Name="BatteryIntelligence"
-    Publisher="CN=Battery Intelligence"
+    Publisher="CN=Naeem Ahmad"
     Version="1.0.0.0" />
 
   <Properties>
     <DisplayName>Battery Intelligence</DisplayName>
-    <PublisherDisplayName>Battery Intelligence</PublisherDisplayName>
+    <PublisherDisplayName>Naeem Ahmad</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
     <Description>Understand your laptop battery, power draw and battery health — locally, with no account and no fabricated numbers.</Description>
   </Properties>

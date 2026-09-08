@@ -6,6 +6,13 @@ A Windows desktop utility that tells you the truth about your laptop battery —
 health, power draw, what's draining it, and how long it will last — **locally**,
 with no account, no cloud, and no fabricated numbers.
 
+**[Download for Windows](https://battery-intelligence.netlify.app)** ·
+[Website](https://battery-intelligence.netlify.app) ·
+[Terms of Use](docs/terms-of-use.md) ·
+[Privacy Policy](docs/privacy-policy.md)
+
+By **Naeem Ahmad**. Free and open source (MIT).
+
 > Every value the app shows is either **Measured** (read from the hardware),
 > **Calculated** (derived from measured values with the method disclosed),
 > labelled **Estimated** (a documented, versioned model), or reported
@@ -80,7 +87,21 @@ and rotated logs. Never inside the install directory, so it survives upgrade and
 uninstall. You can export or delete all of it from within the app. No network
 access is performed by the application, ever.
 
+## Install
+
+Download `BatteryIntelligence-Setup-<version>.exe` from the
+[latest release](https://github.com/myplexlink-ops/battery-intelligence/releases/latest)
+or the [website](https://battery-intelligence.netlify.app) and run it. It is a
+self-contained installer — no .NET, no Windows App Runtime, and no other
+prerequisite is needed. Windows 10 (build 1809 / 17763) or later, 64-bit.
+
+The installer is not code-signed yet, so SmartScreen shows a warning on first
+run: choose **More info → Run anyway**.
+
 ## Licence
 
-[MIT](LICENSE). Third-party components and their licences are listed on the
-About page and in [`docs/security-review.md`](docs/security-review.md).
+[MIT](LICENSE) © 2026 Naeem Ahmad. Third-party components and their licences are
+listed on the About page and in
+[`docs/security-review.md`](docs/security-review.md).
+See also [Terms of Use](docs/terms-of-use.md) and
+[Privacy Policy](docs/privacy-policy.md).

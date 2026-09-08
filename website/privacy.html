@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Battery Intelligence</title>
+<meta name="robots" content="all">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="/icon-192.png">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/icon-192.png" alt="">Battery Intelligence</a>
+    <nav class="nav-links">
+      <a href="/#features">Features</a>
+      <a href="/#install">Install</a>
+      <a class="nav-cta" href="/#download">Download</a>
+    </nav>
+  </div>
+</header>
+<main class="doc">
+  <div class="wrap">
+    <a class="back-link" href="/">&larr; Back to Battery Intelligence</a>
+    <h1>Privacy Policy</h1>
+    <p class="updated">Last updated: 8 September 2026</p>
+<p>Battery Intelligence (&ldquo;the App&rdquo;) is a Windows desktop application created and
+distributed by <strong>Naeem Ahmad</strong> (&ldquo;we&rdquo;, &ldquo;us&rdquo;). This policy explains what the App
+and its website do and do not do with your information. The short version: the
+App runs entirely on your computer, collects nothing about you, and sends
+nothing anywhere.</p>
+<h2>1. The application does not collect or transmit any data</h2>
+<ul>
+<li>The App has <strong>no account, no sign-in, and no cloud component</strong>.</li>
+<li>The App performs <strong>no network requests of any kind</strong>. It does not phone home,
+  check for updates, load remote content, or send crash reports or analytics.</li>
+<li>There is <strong>no telemetry, no usage tracking, and no advertising</strong>.</li>
+</ul>
+<p>You can verify this: the App requests no network capability, and its source code
+is public at
+<code>https://github.com/myplexlink-ops/battery-intelligence</code>.</p>
+<h2>2. What the application reads from your computer</h2>
+<p>To do its job, the App reads the following from your own system, using standard
+Windows interfaces and <strong>without administrator rights</strong>:</p>
+<ul>
+<li>Battery information from the ACPI / power-management interfaces: charge level,
+  capacity, voltage, current, cycle count, temperature (where your hardware
+  exposes it), manufacturer, model, chemistry and serial number.</li>
+<li>System power state: whether you are on AC or battery, screen on/off, device
+  lock/unlock, and sleep/resume events.</li>
+<li>The list of running processes and their CPU time and memory use, which the App
+  uses to estimate which applications are drawing power.</li>
+</ul>
+<p>This information is processed <strong>only on your device</strong>. It is never sent off the
+device by the App.</p>
+<h2>3. Where the application stores data, and for how long</h2>
+<p>All data the App keeps is written to a single folder on your PC:</p>
+<pre><code>%LocalAppData%\BatteryIntelligence
+</code></pre>
+<p>This contains a local SQLite database (battery, power, temperature, session,
+process and analytics history), your settings file, and rotated diagnostic log
+files. Nothing in this folder leaves your machine unless you choose to export or
+share it.</p>
+<ul>
+<li><strong>Retention</strong> is controlled by you in <strong>Settings → Data</strong>. Raw samples are
+  rolled up and pruned on a schedule you configure; sessions and health
+  snapshots are kept for long-term trends.</li>
+<li><strong>You are in control.</strong> You can export all history to CSV or JSON, or delete
+  all history (Settings → Data → &ldquo;Delete all battery history&rdquo;), at any time.</li>
+<li>Uninstalling the App does <strong>not</strong> delete this folder, so your history survives
+  a reinstall or upgrade. To remove it, delete the folder manually after
+  uninstalling.</li>
+</ul>
+<h2>4. Diagnostic logs</h2>
+<p>The App writes local log files to help you (or us, if you send them) diagnose a
+problem. Logs may contain your battery&rsquo;s hardware identifiers, file paths, and
+process names. They are stored only in the folder above and are rotated
+automatically. The &ldquo;Copy report&rdquo; feature on the Diagnostics page redacts your
+user-profile path before putting text on the clipboard. Logs are shared only if
+<strong>you</strong> send them to us.</p>
+<h2>5. The website</h2>
+<p>The App&rsquo;s website (<code>battery-intelligence.netlify.app</code>) is a set of static pages
+hosted by <strong>Netlify</strong>. The site itself sets <strong>no cookies</strong> and runs <strong>no
+analytics or tracking scripts</strong>. As with any website, Netlify&rsquo;s servers
+automatically record standard request information (such as IP address, user
+agent and requested URL) in their infrastructure logs for security and
+operational purposes; this is governed by
+<a href="https://www.netlify.com/privacy/">Netlify&rsquo;s Privacy Policy</a>. The installer is
+downloaded from <strong>GitHub Releases</strong>, subject to
+<a href="https://docs.github.com/site-policy/privacy-policies/github-privacy-statement">GitHub&rsquo;s Privacy Statement</a>.</p>
+<h2>6. Children</h2>
+<p>The App is a technical utility with no content directed at children and collects
+no personal information from anyone.</p>
+<h2>7. Changes to this policy</h2>
+<p>If this policy changes, the &ldquo;Last updated&rdquo; date above will change and the new
+version will be published on the website and in the project repository.
+Because the App collects nothing, changes will generally be clarifications
+rather than expansions of data use.</p>
+<h2>8. Contact</h2>
+<p>Questions about this policy: <strong>awad.print@gmail.com</strong></p>
+  </div>
+</main>
+<footer class="site-footer">
+  <div class="wrap">
+    <div>Battery Intelligence &mdash; an independent utility by <strong>Naeem Ahmad</strong>. MIT licensed.</div>
+    <div class="foot-links">
+      <a href="/terms.html">Terms of Use</a>
+      <a href="/privacy.html">Privacy Policy</a>
+      <a href="https://github.com/myplexlink-ops/battery-intelligence">GitHub</a>
+      <a href="mailto:awad.print@gmail.com">Contact</a>
+    </div>
+  </div>
+</footer>
+</body>
+</html>
