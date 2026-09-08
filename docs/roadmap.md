@@ -1193,9 +1193,10 @@ done; those steps are `docs/release.md` + `docs/qa-checklist.md`.
 - **MSIX packaging (authored)** — `src/BatteryIntelligence.App/Package.appxmanifest`
   (identity, `runFullTrust` only, `windows.startupTask`, splash/logos), a
   `-p:EnablePackaging=true` build path in `App.csproj` that leaves the default
-  build unpackaged, and `tools/generate-msix-assets.ps1` (the tile PNGs, written
-  from source like `generate-icon.ps1`). The **unpackaged** Debug + Release build
-  is verified 0/0; the packaged build + signing + install is `docs/release.md` §4–§6.
+  build unpackaged, and `tools/generate-app-icon.ps1` (the `app.ico`, MSIX tile
+  PNGs and website icons, rescaled from `branding/Battery_Intelligence_Icon.png`).
+  The **unpackaged** Debug + Release build is verified 0/0; the packaged build +
+  signing + install is `docs/release.md` §4–§6.
 - **Versioning** — `Directory.Build.props` gains `<InformationalVersion>` and a
   "bump both here and the manifest" comment; About shows the full version + MIT.
 - **`README.md`, `CHANGELOG.md`, `LICENSE` (MIT)** at the repo root.

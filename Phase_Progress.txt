@@ -833,10 +833,24 @@ What shipped:
 - MSIX packaging AUTHORED: src/BatteryIntelligence.App/Package.appxmanifest
   (identity, runFullTrust only, windows.startupTask, splash/logos); a
   -p:EnablePackaging=true build path in App.csproj that leaves the default build
-  unpackaged; tools/generate-msix-assets.ps1 writes the tile PNGs from source
-  (hand-rolled PNG encoder, like generate-icon.ps1). The unpackaged Debug +
-  Release build is verified 0/0. The .msix build + sign + install is
+  unpackaged; tools/generate-app-icon.ps1 writes app.ico + the tile PNGs + the
+  website icons from branding/Battery_Intelligence_Icon.png. The unpackaged
+  Debug + Release build is verified 0/0. The .msix build + sign + install is
   docs/release.md §4-§6 (needs a CA cert + clean VM).
+
+POST-1.0 SHIP (2026-09-08): Setup.exe installer + branding + website.
+- tools/installer/BatteryIntelligence.iss + tools/build-installer.ps1 ->
+  dist/BatteryIntelligence-Setup-<ver>.exe (self-contained, machine-wide/admin,
+  runs on any x64 Win10 1809+/11; installer+uninstaller taskkill a running
+  instance first; never touches %LOCALAPPDATA%\BatteryIntelligence). docs/release.md §3a.
+- Branded to "Naeem Ahmad": Directory.Build.props, LICENSE, Package.appxmanifest,
+  installer VersionInfo, About page. New app icon (generate-app-icon.ps1).
+- docs/terms-of-use.md + docs/privacy-policy.md (jurisdiction-neutral, contact
+  awad.print@gmail.com). website/ = static marketing site.
+- Repo github.com/myplexlink-ops/battery-intelligence is now PUBLIC.
+  GitHub Release v1.0.0 has the installer + self-contained zip + SHA256SUMS.
+  Site: battery-intelligence.netlify.app (Netlify team "Naeem"/awad-print,
+  site id 5138bbfb-7296-42f7-ba66-7efa5567e9e4).
 - App.Services.StartupService (R-090): a per-user HKCU\...\Run entry (no admin),
   wired to a new Settings "Start when I sign in" toggle. Packaged builds also get
   the manifest's windows.startupTask.
@@ -896,7 +910,7 @@ src/BatteryIntelligence.Data/Sqlite/Migrations/ — V001__InitialSchema.sql,
 docs/qa-checklist.md — the manual release matrix (Phase 14). Run per RC.
 docs/security-review.md — R-100 audit (Phase 14). Clean.
 docs/release.md — the release runbook (Phase 15). Follow to ship.
-src/BatteryIntelligence.App/Package.appxmanifest + tools/generate-msix-assets.ps1
+src/BatteryIntelligence.App/Package.appxmanifest + tools/generate-app-icon.ps1
     + tools/verify-no-simulation.ps1 — the MSIX packaging (Phase 15).
 LICENSE (MIT), README.md, CHANGELOG.md — root, Phase 15.
 App/Services/StartupService.cs — launch-at-sign-in (R-090, Phase 15).
