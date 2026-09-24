@@ -26,7 +26,11 @@
 ;   — spec §58: uninstall must not destroy user history.
 
 #define AppName "Battery Intelligence"
-#define AppVersion "1.0.0"
+; Keep in step with <Version> in Directory.Build.props and <Identity Version> in
+; Package.appxmanifest — this is the third place the version is written, and it
+; names the output file, so a stale value ships a correct build under the wrong
+; name. See docs/release.md section 2.
+#define AppVersion "1.1.0"
 #define AppPublisher "Naeem Ahmad"
 #define AppPublisherURL "https://battery-intelligence.netlify.app"
 #define AppExeName "BatteryIntelligence.exe"

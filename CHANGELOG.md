@@ -3,7 +3,11 @@
 All notable changes to Battery Intelligence. This project follows
 [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 1.1.0 — 2026-09-25
+
+A correctness release for the Battery Health Score. If you run 1.0.0, the score
+it showed you may have been wrong in either direction; this release fixes the
+causes and discards the stored snapshots that cannot be trusted.
 
 ### Fixed
 

@@ -1,6 +1,6 @@
 # Release Runbook
 
-Status: 1.0.0. Covers spec §58 (distribution, data preservation) and §69 (the
+Status: 1.1.0. Covers spec §58 (distribution, data preservation) and §69 (the
 completed doc set). Phase 15.
 
 This is the step-by-step for cutting a release. Items marked **(clean VM)** need a
@@ -31,15 +31,21 @@ so Release is clean by construction; this is the belt-and-braces check (prd.md N
 
 ## 2. Versioning
 
-One version, two files (there is a comment in each pointing at the other):
+One version, **three** files (there is a comment in each pointing at the others):
 
 1. `Directory.Build.props` — `<Version>`, `<AssemblyVersion>`, `<FileVersion>`,
    `<InformationalVersion>`.
 2. `src/BatteryIntelligence.App/Package.appxmanifest` — `<Identity Version="x.y.z.0">`
    (four-part; the revision stays `0`).
+3. `tools/installer/BatteryIntelligence.iss` — `#define AppVersion`. This one names
+   the output file (`BatteryIntelligence-Setup-<version>.exe`), so leaving it stale
+   ships a correct build under the previous version's name — which is worse than a
+   build that fails, because nothing about it looks wrong. It was missed in the
+   1.0.0 → 1.1.0 bump and caught at the packaging step.
 
 Then add a `## x.y.z` section to `CHANGELOG.md` and update the `Status:` line in
-`docs/roadmap.md`.
+every `docs/*.md` (they all carry one), including `docs/roadmap.md` and the
+`Schema version` in `docs/database.md` if a migration shipped.
 
 ---
 

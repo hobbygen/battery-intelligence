@@ -23,7 +23,7 @@
   <Identity
     Name="BatteryIntelligence"
     Publisher="CN=Naeem Ahmad"
-    Version="1.0.0.0" />
+    Version="1.1.0.0" />
 
   <Properties>
     <DisplayName>Battery Intelligence</DisplayName>

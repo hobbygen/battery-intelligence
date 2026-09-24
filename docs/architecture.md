@@ -1,6 +1,6 @@
 # Architecture
 
-Status: 1.0.0 — all phases complete. Version 1.0.0.
+Status: 1.1.0 — all phases complete. Version 1.1.0.
 
 ---
 
