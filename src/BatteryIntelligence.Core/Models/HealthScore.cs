@@ -9,20 +9,40 @@ namespace BatteryIntelligence.Core.Models;
 /// </summary>
 /// <param name="Key">Stable identifier, e.g. "retention".</param>
 /// <param name="Label">Human-readable name.</param>
-/// <param name="Weight">The factor's design weight before renormalisation.</param>
-/// <param name="NormalisedWeight">Its weight after renormalising across the available factors (sums to 1.0).</param>
+/// <param name="Weight">The factor's design weight before renormalisation, or — for a
+/// <see cref="HealthFactorRole.Penalty"/> factor — the largest share of the score it can remove.</param>
+/// <param name="NormalisedWeight">Its weight after renormalising across the available
+/// weighted factors (those sum to 1.0). Always 0 for a penalty factor, which takes no
+/// share of the weighted mean.</param>
 /// <param name="Score01">The factor's own 0–1 sub-score, or <see langword="null"/> when the factor is unavailable and its weight was redistributed.</param>
 /// <param name="Basis">A one-line explanation of what produced <paramref name="Score01"/>.</param>
+/// <param name="Role">Whether the factor is averaged into the score or can only subtract from it.</param>
 public sealed record HealthFactor(
     string Key,
     string Label,
     double Weight,
     double NormalisedWeight,
     double? Score01,
-    string Basis)
+    string Basis,
+    HealthFactorRole Role = HealthFactorRole.Weighted)
 {
     /// <summary>Whether this factor contributed (had data) or had its weight redistributed.</summary>
     public bool Contributed => Score01 is not null;
+}
+
+/// <summary>How a <see cref="HealthFactor"/> enters the score.</summary>
+public enum HealthFactorRole
+{
+    /// <summary>Averaged into the score with <see cref="HealthFactor.NormalisedWeight"/>.</summary>
+    Weighted = 0,
+
+    /// <summary>
+    /// Can only subtract points, never add them. Used for factors that describe how
+    /// the machine is used rather than the state of the cell: gentle use is not
+    /// evidence of a healthy battery, so it must not raise the score, while harsh
+    /// use is a legitimate reason to lower it.
+    /// </summary>
+    Penalty = 1,
 }
 
 /// <summary>

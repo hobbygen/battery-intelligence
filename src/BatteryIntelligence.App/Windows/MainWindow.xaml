@@ -154,13 +154,17 @@
                 </Button>
 
                 <Button
+                    x:Name="ThemeToggleButton"
                     Width="34" Height="30"
                     Padding="0"
                     Background="Transparent"
                     BorderThickness="0"
-                    AutomationProperties.Name="Toggle light and dark theme"
+                    AutomationProperties.Name="Theme"
                     Click="OnThemeToggleClick">
-                    <FontIcon FontSize="16" Glyph="&#xE771;" />
+                    <FontIcon x:Name="ThemeToggleIcon" FontSize="16" Glyph="&#xE7F4;" />
+                    <ToolTipService.ToolTip>
+                        <ToolTip x:Name="ThemeToggleTip" Content="Theme: System" />
+                    </ToolTipService.ToolTip>
                 </Button>
 
                 <Button

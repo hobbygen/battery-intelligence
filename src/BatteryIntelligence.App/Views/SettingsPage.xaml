@@ -36,7 +36,7 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <FontIcon Grid.Column="0" FontSize="19" Foreground="{ThemeResource AppAccentBrush}" Glyph="&#xE771;" />
+                            <FontIcon Grid.Column="0" FontSize="19" Foreground="{ThemeResource AppAccentBrush}" Glyph="&#xE706;" />
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                 <TextBlock FontSize="13.5" Text="Theme" />
                                 <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="Applied immediately, without restarting. System follows your Windows colour mode." />

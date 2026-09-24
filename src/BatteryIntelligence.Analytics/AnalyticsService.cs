@@ -1,4 +1,5 @@
 using BatteryIntelligence.Core.Analytics;
+using BatteryIntelligence.Core.Battery;
 using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Interfaces;
@@ -242,10 +243,13 @@ public sealed class AnalyticsService : IAnalyticsService, IHostedService, IDispo
             AnalyticsSettingsView cfg = ReadConfig();
 
             // --- Degradation trend -----------------------------------------
+            // Only usable retention takes part: a reading the provider graded Suspect
+            // (capacities that cannot both be true of the same pack) would otherwise
+            // both bend the trend line and become the health score's mandatory input.
             List<RetentionPoint> retentionPoints = [.. history
-                .Where(h => h.RetentionPercent is not null)
+                .Where(h => h.RetentionPercent is double p && BatteryCalculations.IsPlausibleRetention(p))
                 .Select(h => new RetentionPoint(h.TimestampUtc, h.RetentionPercent!.Value))];
-            if (info.RetentionPercent is { HasValue: true } liveRetention)
+            if (info.RetentionPercent is { IsUsable: true } liveRetention)
             {
                 retentionPoints.Add(new RetentionPoint(now, liveRetention.Value!.Value));
             }
@@ -274,9 +278,20 @@ public sealed class AnalyticsService : IAnalyticsService, IHostedService, IDispo
 
             (double? avgDod, double? chargeCov) = BehaviouralInputs(recentSessions);
 
+            // A Suspect retention is passed as null, which makes the whole score
+            // Unavailable — the honest answer — rather than a confident verdict
+            // built on a figure the provider already flagged as impossible.
+            double? usableRetention = info.RetentionPercent.IsUsable ? info.RetentionPercent.Value : null;
+            if (info.RetentionPercent.HasValue && usableRetention is null)
+            {
+                _logger.LogWarning(
+                    "Capacity retention of {Retention:F1}% is outside the plausible band; the health score is reported Unavailable.",
+                    info.RetentionPercent.Value);
+            }
+
             HealthScore health = HealthScoreCalculator.Compute(
                 new HealthScoreInputs(
-                    RetentionPercent: info.RetentionPercent.Value,
+                    RetentionPercent: usableRetention,
                     DegradationSlopePercentPerMonth: trend.IsAvailable ? trend.SlopePercentPerMonth : null,
                     CycleCount: info.CycleCount.HasValue ? info.CycleCount.Value : null,
                     Chemistry: primary.Device.Chemistry,
@@ -290,7 +305,7 @@ public sealed class AnalyticsService : IAnalyticsService, IHostedService, IDispo
                 await _healthStore.AppendAsync(
                     health,
                     hardwareId,
-                    info.RetentionPercent.Value,
+                    usableRetention,
                     info.FullChargeCapacityMWh.HasValue ? info.FullChargeCapacityMWh.Value : null,
                     info.CycleCount.HasValue ? info.CycleCount.Value : null,
                     now,

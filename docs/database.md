@@ -491,8 +491,9 @@ samples alone would exceed 1.8 GB per year — the concrete reason spec §31 exi
 Sequential, forward-only, each in a transaction:
 
 ```
-V001__InitialSchema.sql       — the 18 tables and their indexes
+V001__InitialSchema.sql        — the 18 tables and their indexes
 V002__AggregateTimeIndexes.sql — IX_SampleMinute_Time, IX_SampleHour_Time
+V003__PurgeHealthScoreV1Snapshots.sql — discards BatteryHealthSnapshot rows tagged HealthScoreV1
 ```
 
 **V002 (Phase 14).** `SampleMinute` and `SampleHour` are `WITHOUT ROWID` with
@@ -503,6 +504,27 @@ help and SQLite scanned the whole table. V002 adds a plain index on `MinuteUtc` 
 EXISTS`), no table rebuild. It is also the first migration to exercise
 backup-before-migration (`battery.db.bak-v002`) — see R-066. Query plans are
 asserted by `QueryPlanTests`.
+
+**V003.** The only migration so far that deletes user data, and the reasoning is
+set out at length in the script itself. In short: the `HealthScoreV1` provider
+could pair a full-charge capacity read in milliamp-hours with a design capacity
+read in milliwatt-hours, because the unit flag was taken from one source and
+applied to values chosen from another. `RetentionPercent` is one divided by the
+other, so an affected row is out by roughly the pack voltage — and nothing stored
+in the row distinguishes an affected row from a sound one, because the raw source
+values were never persisted. Those rows feed the degradation trend over a 180-day
+window, so leaving them would bend the trend and the score built on it for six
+months. `AlgorithmVersion = 'HealthScoreV1'` is precisely the set written by the
+defective pipeline, so that is what the migration matches on — not a plausibility
+range, which would keep exactly the affected rows that happened to land in band.
+
+This is a deliberate exception to "never destructive", not a loosening of it. It
+qualifies only because the data cannot be repaired, cannot be told apart from
+sound data, and actively corrupts a derived figure the user is shown. The
+migration is not purely additive, so the runner copies the database to
+`battery.db.bak-v003` first and the discarded rows stay recoverable from there.
+The cost — the degradation trend unavailable until roughly 30 days of fresh
+snapshots accumulate — is stated in the UI as "collecting it now".
 
 Runner: read `SchemaMigration`, run `PRAGMA quick_check` (a corrupt file aborts
 the run without being touched — Phase 14), apply every embedded script with a
@@ -517,4 +539,6 @@ higher version in order, record each. Rules per spec §64:
   which would destroy exactly the history the user cares most about.
 
 Migration tests (spec §64) run a v1 database populated with representative rows
-through every subsequent migration and assert no row loss.
+through every subsequent migration and assert no row loss — except the
+`HealthScoreV1` snapshots V003 exists to remove, which the same test asserts are
+gone while every other seeded row survives.

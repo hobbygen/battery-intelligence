@@ -13,6 +13,11 @@ public interface IThemeService
     /// <summary>The theme currently applied.</summary>
     ThemePreference Current { get; }
 
+    /// <summary>Raised after <see cref="Apply"/> changes the theme, so chrome that
+    /// names the current mode — the title-bar toggle — can follow a change made
+    /// from anywhere else.</summary>
+    event EventHandler<ThemePreference>? Changed;
+
     /// <summary>Registers the window whose content theme is controlled.</summary>
     void Initialize(Window window);
 
@@ -52,6 +57,9 @@ public sealed class ThemeService : IThemeService
     }
 
     /// <inheritdoc/>
+    public event EventHandler<ThemePreference>? Changed;
+
+    /// <inheritdoc/>
     public ThemePreference Current { get; private set; } = ThemePreference.System;
 
     /// <inheritdoc/>
@@ -82,6 +90,7 @@ public sealed class ThemeService : IThemeService
         };
 
         _logger.LogDebug("Applied theme {Theme}.", theme);
+        Changed?.Invoke(this, theme);
     }
 
     private void ApplyBackdrop(Window window)

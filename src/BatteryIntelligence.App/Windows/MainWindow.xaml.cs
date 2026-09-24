@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Windows.System;
@@ -25,6 +26,11 @@ public sealed partial class MainWindow : Window
     private readonly IWindowStateService _windowState;
     private readonly ISettingsService _settings;
     private readonly AppVisibilityState _visibility;
+
+    /// <summary>Segoe Fluent Icons: Brightness (sun), QuietHours (moon), TVMonitor.</summary>
+    private const string ThemeGlyphLight = "\uE706";
+    private const string ThemeGlyphDark = "\uE708";
+    private const string ThemeGlyphSystem = "\uE7F4";
 
     /// <summary>Set when the user chooses Exit, so the close is not turned into a hide.</summary>
     private bool _isExiting;
@@ -62,6 +68,9 @@ public sealed partial class MainWindow : Window
         ConfigureMinimumSize();
 
         _theme.Initialize(this);
+        UpdateThemeToggleAffordance();
+        // Keeps the title-bar glyph honest when the theme is changed from Settings.
+        _theme.Changed += (_, _) => UpdateThemeToggleAffordance();
         _windowState.Restore(this);
 
         _navigation.Initialize(ContentFrame);
@@ -263,13 +272,36 @@ public sealed partial class MainWindow : Window
         _ = sender;
         _ = args;
 
-        // Resolve the effective theme, then flip it. "System" collapses to whichever
-        // side it is currently showing.
-        ElementTheme actual = (Content as FrameworkElement)?.ActualTheme ?? ElementTheme.Light;
-        ThemePreference next = actual == ElementTheme.Dark ? ThemePreference.Light : ThemePreference.Dark;
+        // Cycles the three preferences rather than flipping two, so "System" stays
+        // reachable from the title bar and the icon can always name the current mode.
+        ThemePreference next = _theme.Current switch
+        {
+            ThemePreference.System => ThemePreference.Light,
+            ThemePreference.Light => ThemePreference.Dark,
+            _ => ThemePreference.System,
+        };
 
         _theme.Apply(next);
+        UpdateThemeToggleAffordance();
         _ = _settings.UpdateAsync(s => s.Appearance.Theme = next, "Appearance");
+    }
+
+    /// <summary>
+    /// Points the title-bar button's glyph and tooltip at the theme currently in
+    /// effect: a sun for Light, a moon for Dark, a monitor for System.
+    /// </summary>
+    private void UpdateThemeToggleAffordance()
+    {
+        (string glyph, string label) = _theme.Current switch
+        {
+            ThemePreference.Light => (ThemeGlyphLight, "Light"),
+            ThemePreference.Dark => (ThemeGlyphDark, "Dark"),
+            _ => (ThemeGlyphSystem, "System"),
+        };
+
+        ThemeToggleIcon.Glyph = glyph;
+        ThemeToggleTip.Content = $"Theme: {label} — click to change";
+        AutomationProperties.SetName(ThemeToggleButton, $"Theme: {label}. Click to change.");
     }
 
     private void OnSettingsButtonClick(object sender, RoutedEventArgs args)

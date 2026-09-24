@@ -94,7 +94,13 @@ public sealed class CompositeBatteryProvider : IBatteryProvider
         return snapshots;
     }
 
-    private BatterySnapshot BuildSnapshot(
+    /// <summary>
+    /// Merges one battery device's view across the four sources. Internal and static
+    /// rather than private so the merge — in particular the per-source unit handling
+    /// that capacity retention depends on — can be exercised against crafted source
+    /// readings without a battery present.
+    /// </summary>
+    internal static BatterySnapshot BuildSnapshot(
         int index,
         RawBatteryEntry? s1,
         RawBatteryEntry? s3,
@@ -102,12 +108,6 @@ public sealed class CompositeBatteryProvider : IBatteryProvider
         RawBatteryEntry? s2,
         DateTimeOffset now)
     {
-        // C07: design capacity — S1 -> S4 -> S3.
-        Measurement<int> design = FirstAvailable(
-            s1?.Device.DesignCapacityMWh, s4?.Device.DesignCapacityMWh, s3?.Device.DesignCapacityMWh);
-
-        bool reportsInMilliamps = s4?.Device.ReportsInMilliamps ?? s3?.Device.ReportsInMilliamps ?? false;
-
         string? chemistry = s4?.Device.Chemistry ?? s3?.Device.Chemistry;
         string? manufacturer = s3?.Device.Manufacturer ?? s4?.Device.Manufacturer;
         string? deviceName = s3?.Device.DeviceName ?? s4?.Device.DeviceName;
@@ -118,6 +118,37 @@ public sealed class CompositeBatteryProvider : IBatteryProvider
             ?? (serial is not null && deviceName is not null ? $"{serial}:{deviceName}" : null)
             ?? $"battery{index}";
 
+        // C09: voltage — S3 -> S4. Not exposed by S1. Resolved before any capacity,
+        // because the milliamp normalisation below needs it.
+        Measurement<int> voltage = FirstAvailable(s3?.Reading.VoltageMv, s4?.Reading.VoltageMv);
+
+        // C05/C06/C07/C10: capacity and rate — Q2-normalised with the unit flag of
+        // the source that produced each value (docs/capability-matrix.md section 4).
+        //
+        // The flag is per-source: WinRT always reports milliwatt-hours, while WMI and
+        // IOCTL report milliamp-hours whenever the pack sets CapacityRelative. Applying
+        // one source's flag to another source's number rescaled some capacities by the
+        // pack voltage and not others, which is what made capacity retention — and the
+        // health score built on top of it — read as a fraction of, or a multiple of,
+        // the true figure.
+        Measurement<int> remaining = FirstAvailable<int>(
+            NormalizeReading(s1, r => r.RemainingCapacityMWh, voltage),
+            NormalizeReading(s3, r => r.RemainingCapacityMWh, voltage),
+            NormalizeReading(s4, r => r.RemainingCapacityMWh, voltage));
+
+        // C06/C07: full-charge and design capacity are the two halves of capacity
+        // retention, so they are taken from one source wherever a source reports both.
+        // Pairing them across sources would divide one firmware's idea of the pack by
+        // another's; only when no single source has both is the cross-source pair used,
+        // and the retention derived from it is graded Estimated rather than Calculated.
+        (Measurement<int> full, Measurement<int> design, bool pairedFromOneSource) =
+            ResolveCapacityPair(s1, s4, s3, voltage);
+
+        Measurement<int> power = FirstAvailable<int>(
+            NormalizeReading(s1, r => r.PowerMw, voltage),
+            NormalizeReading(s3, r => r.PowerMw, voltage),
+            NormalizeReading(s4, r => r.PowerMw, voltage));
+
         BatteryDevice device = new(
             HardwareId: hardwareId,
             DeviceName: deviceName,
@@ -126,31 +157,7 @@ public sealed class CompositeBatteryProvider : IBatteryProvider
             Chemistry: chemistry,
             DesignCapacityMWh: design,
             DesignVoltageMv: Measurement<int>.Unavailable(),
-            ReportsInMilliamps: reportsInMilliamps);
-
-        // C09: voltage — S3 -> S4. Not exposed by S1.
-        Measurement<int> voltage = FirstAvailable(s3?.Reading.VoltageMv, s4?.Reading.VoltageMv);
-
-        // C05/C06/C10: capacity and rate — S1 -> S3 -> S4, then Q2-normalised
-        // using whichever voltage is available (design voltage is not exposed by
-        // any current source, so live voltage stands in — see docs/estimation-strategy.md
-        // section 2 and quirk Q2 in docs/capability-matrix.md section 4).
-        Measurement<int> remaining = BatteryCalculations.NormalizeMilliampsToMilliwatts(
-            FirstAvailable(s1?.Reading.RemainingCapacityMWh, s3?.Reading.RemainingCapacityMWh, s4?.Reading.RemainingCapacityMWh),
-            reportsInMilliamps,
-            voltage);
-
-        Measurement<int> full = BatteryCalculations.NormalizeMilliampsToMilliwatts(
-            FirstAvailable(s1?.Reading.FullChargeCapacityMWh, s3?.Reading.FullChargeCapacityMWh, s4?.Reading.FullChargeCapacityMWh),
-            reportsInMilliamps,
-            voltage);
-
-        Measurement<int> designNormalized = BatteryCalculations.NormalizeMilliampsToMilliwatts(design, reportsInMilliamps, voltage);
-
-        Measurement<int> power = BatteryCalculations.NormalizeMilliampsToMilliwatts(
-            FirstAvailable(s1?.Reading.PowerMw, s3?.Reading.PowerMw, s4?.Reading.PowerMw),
-            reportsInMilliamps,
-            voltage);
+            ReportsInMilliamps: s4?.Device.ReportsInMilliamps ?? s3?.Device.ReportsInMilliamps ?? false);
 
         // C02: percentage — S1 (remaining/full) -> S2.
         Measurement<double> percentage = FirstAvailable(
@@ -170,7 +177,12 @@ public sealed class CompositeBatteryProvider : IBatteryProvider
         Measurement<double> temperature = FirstAvailable(s4?.Reading.TemperatureCelsius, s3?.Reading.TemperatureCelsius);
 
         // C08: retention — Calculated from C06/C07. C11: current — Calculated from C10/C09.
-        Measurement<double> retention = BatteryCalculations.CalculateRetentionPercent(full, designNormalized);
+        Measurement<double> retention = BatteryCalculations.CalculateRetentionPercent(full, design);
+        if (!pairedFromOneSource && retention.Value is double crossSource)
+        {
+            retention = Measurement<double>.Estimated(crossSource, MeasurementSource.Derived);
+        }
+
         Measurement<double> current = BatteryCalculations.CalculateCurrentMa(power, voltage);
 
         BatteryInfo info = new()
@@ -182,7 +194,7 @@ public sealed class CompositeBatteryProvider : IBatteryProvider
             AcOnline = acOnline,
             RemainingCapacityMWh = remaining,
             FullChargeCapacityMWh = full,
-            DesignCapacityMWh = designNormalized,
+            DesignCapacityMWh = design,
             RetentionPercent = retention,
             VoltageMv = voltage,
             PowerMw = power,
@@ -209,6 +221,74 @@ public sealed class CompositeBatteryProvider : IBatteryProvider
             return [];
         }
     }
+
+    /// <summary>
+    /// Reads one field from one source's live reading and converts it from
+    /// milliamps to milliwatts when <em>that source</em> says the pack reports in
+    /// milliamps (quirk Q2). Design voltage is exposed by no current source, so
+    /// live voltage stands in (docs/estimation-strategy.md section 2).
+    /// </summary>
+    private static Measurement<int> NormalizeReading(
+        RawBatteryEntry? entry,
+        Func<RawBatteryReading, Measurement<int>> field,
+        Measurement<int> voltageMv) =>
+        entry is null
+            ? Measurement<int>.Unavailable()
+            : BatteryCalculations.NormalizeMilliampsToMilliwatts(
+                field(entry.Reading), entry.Device.ReportsInMilliamps, voltageMv);
+
+    /// <summary>
+    /// Picks the full-charge/design capacity pair that capacity retention is
+    /// computed from, preferring a single source that reports both.
+    /// </summary>
+    /// <remarks>
+    /// Sources are tried in the C06/C07 priority order S1 -> S4 -> S3. The third
+    /// element of the result is <see langword="false"/> when no source offered both
+    /// and the two halves had to be taken from different firmware views, which the
+    /// caller uses to downgrade the retention grade.
+    /// </remarks>
+    private static (Measurement<int> Full, Measurement<int> Design, bool PairedFromOneSource) ResolveCapacityPair(
+        RawBatteryEntry? s1,
+        RawBatteryEntry? s4,
+        RawBatteryEntry? s3,
+        Measurement<int> voltageMv)
+    {
+        foreach (RawBatteryEntry? entry in (ReadOnlySpan<RawBatteryEntry?>)[s1, s4, s3])
+        {
+            if (entry is null)
+            {
+                continue;
+            }
+
+            Measurement<int> full = NormalizeReading(entry, r => r.FullChargeCapacityMWh, voltageMv);
+            Measurement<int> design = BatteryCalculations.NormalizeMilliampsToMilliwatts(
+                entry.Device.DesignCapacityMWh, entry.Device.ReportsInMilliamps, voltageMv);
+
+            if (full.HasValue && design.HasValue)
+            {
+                return (full, design, true);
+            }
+        }
+
+        // No single source has both halves. Fall back to the per-field chains.
+        Measurement<int> fallbackFull = FirstAvailable<int>(
+            NormalizeReading(s1, r => r.FullChargeCapacityMWh, voltageMv),
+            NormalizeReading(s3, r => r.FullChargeCapacityMWh, voltageMv),
+            NormalizeReading(s4, r => r.FullChargeCapacityMWh, voltageMv));
+
+        Measurement<int> fallbackDesign = FirstAvailable<int>(
+            NormalizeDesign(s1, voltageMv),
+            NormalizeDesign(s4, voltageMv),
+            NormalizeDesign(s3, voltageMv));
+
+        return (fallbackFull, fallbackDesign, false);
+    }
+
+    private static Measurement<int> NormalizeDesign(RawBatteryEntry? entry, Measurement<int> voltageMv) =>
+        entry is null
+            ? Measurement<int>.Unavailable()
+            : BatteryCalculations.NormalizeMilliampsToMilliwatts(
+                entry.Device.DesignCapacityMWh, entry.Device.ReportsInMilliamps, voltageMv);
 
     private static Measurement<T> FirstAvailable<T>(params ReadOnlySpan<Measurement<T>?> candidates)
         where T : struct

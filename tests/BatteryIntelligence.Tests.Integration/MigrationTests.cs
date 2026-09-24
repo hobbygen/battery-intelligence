@@ -13,7 +13,7 @@ namespace BatteryIntelligence.Tests.Integration;
 public sealed class MigrationTests
 {
     /// <summary>The highest embedded migration version. Bump when a new V00N ships.</summary>
-    private const int LatestVersion = 2;
+    private const int LatestVersion = 3;
 
     private static readonly string[] ExpectedTables =
     [
@@ -90,6 +90,103 @@ public sealed class MigrationTests
         }
     }
 
+    /// <summary>
+    /// V003 removes every snapshot the HealthScoreV1 pipeline wrote, whatever its
+    /// stored retention looks like — an affected row's figure can land anywhere,
+    /// and nothing in the row says which rows were affected. Snapshots from later
+    /// algorithm versions are written by the corrected provider and must survive.
+    /// </summary>
+    [Fact]
+    public async Task V003_RemovesEveryHealthScoreV1Snapshot_AndKeepsLaterOnes()
+    {
+        using TempDatabase db = new();
+        await db.MigrateAsync();
+
+        long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        await db.ExecuteAsync(
+            "INSERT INTO BatteryDevice (HardwareId, FirstSeenUtc, LastSeenUtc, IsPresent) VALUES ('battery0', $n, $n, 1);",
+            ("$n", now));
+        long deviceId = await db.ScalarAsync<long>("SELECT Id FROM BatteryDevice WHERE HardwareId = 'battery0';");
+
+        // Retention values spanning implausible-low, ordinary and implausible-high:
+        // the version tag decides, not the number.
+        (double Retention, string Version)[] seed =
+        [
+            (7.4, "HealthScoreV1"),
+            (82.0, "HealthScoreV1"),
+            (910.0, "HealthScoreV1"),
+            (82.0, "HealthScoreV2"),
+        ];
+
+        for (int i = 0; i < seed.Length; i++)
+        {
+            await db.ExecuteAsync(
+                """
+                INSERT INTO BatteryHealthSnapshot
+                    (TimestampUtc, BatteryId, RetentionPercent, HealthScore, HealthCategory, AlgorithmVersion)
+                VALUES ($t, $d, $r, 70.0, 2, $v);
+                """,
+                ("$t", now - (i * 60_000)), ("$d", deviceId),
+                ("$r", seed[i].Retention), ("$v", seed[i].Version));
+        }
+
+        // Re-run the shipped V003 script rather than a copy of its statement, so the
+        // test cannot drift from the migration it is asserting about.
+        await db.ExecuteAsync(await ReadMigrationSqlAsync("V003"));
+
+        Assert.Equal(0L, await db.ScalarAsync<long>(
+            "SELECT COUNT(*) FROM BatteryHealthSnapshot WHERE AlgorithmVersion = 'HealthScoreV1';"));
+
+        long survivors = await db.ScalarAsync<long>("SELECT COUNT(*) FROM BatteryHealthSnapshot;");
+        Assert.Equal(1L, survivors);
+        Assert.Equal("HealthScoreV2", await db.ScalarAsync<string>(
+            "SELECT AlgorithmVersion FROM BatteryHealthSnapshot LIMIT 1;"));
+    }
+
+    [Fact]
+    public async Task V003_LeavesTheSurroundingHistoryAlone()
+    {
+        using TempDatabase db = new();
+        await db.MigrateAsync();
+
+        long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        await db.ExecuteAsync(
+            "INSERT INTO BatteryDevice (HardwareId, FirstSeenUtc, LastSeenUtc, IsPresent) VALUES ('battery0', $n, $n, 1);",
+            ("$n", now));
+        long deviceId = await db.ScalarAsync<long>("SELECT Id FROM BatteryDevice WHERE HardwareId = 'battery0';");
+
+        await db.ExecuteAsync(
+            "INSERT INTO BatterySample (TimestampUtc, BatteryId, Percentage, Status, DataQuality, MeasurementSource) VALUES ($t, $d, 80, 2, 1, 1);",
+            ("$t", now), ("$d", deviceId));
+        await db.ExecuteAsync(
+            "INSERT INTO BatterySession (BatteryId, SessionType, StartUtc) VALUES ($d, 2, $t);",
+            ("$d", deviceId), ("$t", now));
+        await db.ExecuteAsync(
+            """
+            INSERT INTO BatteryHealthSnapshot
+                (TimestampUtc, BatteryId, RetentionPercent, HealthScore, HealthCategory, AlgorithmVersion)
+            VALUES ($t, $d, 82.0, 70.0, 2, 'HealthScoreV1');
+            """,
+            ("$t", now), ("$d", deviceId));
+
+        await db.ExecuteAsync(await ReadMigrationSqlAsync("V003"));
+
+        // Raw samples and sessions hold measured quantities the defect never touched.
+        Assert.Equal(1L, await db.ScalarAsync<long>("SELECT COUNT(*) FROM BatterySample;"));
+        Assert.Equal(1L, await db.ScalarAsync<long>("SELECT COUNT(*) FROM BatterySession;"));
+        Assert.Equal(1L, await db.ScalarAsync<long>("SELECT COUNT(*) FROM BatteryDevice;"));
+        Assert.Equal(0L, await db.ScalarAsync<long>("SELECT COUNT(*) FROM BatteryHealthSnapshot;"));
+    }
+
+    private static async Task<string> ReadMigrationSqlAsync(string versionTag)
+    {
+        System.Reflection.Assembly asm = typeof(DatabaseMigrator).Assembly;
+        string resource = asm.GetManifestResourceNames().Single(n => n.Contains(versionTag, StringComparison.Ordinal));
+        await using Stream stream = asm.GetManifestResourceStream(resource)!;
+        using var reader = new StreamReader(stream);
+        return await reader.ReadToEndAsync();
+    }
+
     [Fact]
     public async Task LaterMigration_BacksUpFirst_AndLosesNoRows()
     {
@@ -113,12 +210,21 @@ public sealed class MigrationTests
             Assert.Equal(1L, await ScalarAsync<long>(connection, "SELECT COUNT(*) FROM BatterySession;"));
             Assert.Equal(deviceId, await ScalarAsync<long>(connection, "SELECT Id FROM BatteryDevice LIMIT 1;"));
 
+            // V003 discards the snapshots the defective provider wrote, and only those.
+            Assert.Equal(0L, await ScalarAsync<long>(
+                connection, "SELECT COUNT(*) FROM BatteryHealthSnapshot WHERE AlgorithmVersion = 'HealthScoreV1';"));
+            Assert.Equal(1L, await ScalarAsync<long>(
+                connection, "SELECT COUNT(*) FROM BatteryHealthSnapshot;"));
+
             Assert.True(System.IO.File.Exists($"{path}.bak-v002"), "Expected a pre-migration backup for V002.");
+            Assert.True(
+                System.IO.File.Exists($"{path}.bak-v003"),
+                "Expected a pre-migration backup for V003 — the purge must be recoverable.");
         }
         finally
         {
             SqliteConnection.ClearAllPools();
-            foreach (string p in new[] { path, $"{path}-wal", $"{path}-shm", $"{path}.bak-v002" })
+            foreach (string p in new[] { path, $"{path}-wal", $"{path}-shm", $"{path}.bak-v002", $"{path}.bak-v003" })
             {
                 try { if (System.IO.File.Exists(p)) System.IO.File.Delete(p); } catch (System.IO.IOException) { }
             }
@@ -167,6 +273,27 @@ public sealed class MigrationTests
         await Exec(connection,
             "INSERT INTO BatterySession (BatteryId, SessionType, StartUtc) VALUES ($d, 2, $t);",
             ("$d", deviceId), ("$t", now));
+
+        // Two snapshots from the defective pipeline and one from the corrected one,
+        // so the V003 purge has both something to remove and something to preserve.
+        for (int i = 0; i < 2; i++)
+        {
+            await Exec(connection,
+                """
+                INSERT INTO BatteryHealthSnapshot
+                    (TimestampUtc, BatteryId, RetentionPercent, HealthScore, HealthCategory, AlgorithmVersion)
+                VALUES ($t, $d, 82.0, 74.0, 2, 'HealthScoreV1');
+                """,
+                ("$t", now - i * 60_000), ("$d", deviceId));
+        }
+
+        await Exec(connection,
+            """
+            INSERT INTO BatteryHealthSnapshot
+                (TimestampUtc, BatteryId, RetentionPercent, HealthScore, HealthCategory, AlgorithmVersion)
+            VALUES ($t, $d, 82.0, 80.0, 2, 'HealthScoreV2');
+            """,
+            ("$t", now - 600_000), ("$d", deviceId));
 
         return deviceId;
     }

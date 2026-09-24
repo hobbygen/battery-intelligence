@@ -18,13 +18,40 @@ public static class BatteryCalculations
     private const int MaxPlausibleVoltageMv = 30_000;
 
     /// <summary>
+    /// Lowest retention treated as a real reading. A pack below this is not a worn
+    /// battery, it is two capacities expressed in different units — the milliamp/
+    /// milliwatt mix-up divides retention by roughly the pack voltage in volts, so a
+    /// healthy pack surfaces here in the single digits. Firmware declares a pack
+    /// end-of-life long before genuine retention reaches this figure.
+    /// </summary>
+    private const double MinPlausibleRetentionPercent = 15.0;
+
+    /// <summary>
+    /// Highest retention treated as a real reading. Slightly over 100% is ordinary
+    /// on a new pack — manufacturers under-state design capacity and firmware
+    /// recalibrates upward — but a large excess is the same unit mix-up inverted.
+    /// </summary>
+    private const double MaxPlausibleRetentionPercent = 125.0;
+
+    /// <summary>
     /// Capacity retention: full-charge capacity as a percentage of design capacity
-    /// (C08). Always <see cref="DataQuality.Calculated"/>; <see cref="Measurement{T}.Unavailable"/>
-    /// when either input is missing or design capacity is non-positive.
+    /// (C08). <see cref="Measurement{T}.Unavailable"/> when either input is missing
+    /// or design capacity is non-positive, and <see cref="Measurement{T}.Suspect"/>
+    /// when the ratio is outside the physically plausible band.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Specification section 9 forbids inventing a health percentage when the
     /// inputs do not exist — there is deliberately no fallback value here.
+    /// </para>
+    /// <para>
+    /// The plausibility band exists because retention is the mandatory input to the
+    /// Battery Health Score. An implausible ratio that is merely clamped becomes a
+    /// confident verdict: clamped low it rates a new pack Poor, clamped high it
+    /// rates a worn one Excellent. Graded Suspect it is kept for diagnosis and
+    /// excluded from every computation, which is what
+    /// <see cref="Measurement{T}.IsUsable"/> already expresses.
+    /// </para>
     /// </remarks>
     public static Measurement<double> CalculateRetentionPercent(
         Measurement<int> fullChargeMWh,
@@ -35,13 +62,23 @@ public static class BatteryCalculations
             return Measurement<double>.Unavailable(MeasurementSource.Derived);
         }
 
-        return Measurement.Combine(
+        Measurement<double> retention = Measurement.Combine(
             fullChargeMWh,
             designMWh,
-            (full, design) => full / (double)design * 100.0,
+            (full, designCapacity) => full / (double)designCapacity * 100.0,
             DataQuality.Calculated,
             MeasurementSource.Derived);
+
+        return retention.Value is double percent && !IsPlausibleRetention(percent)
+            ? Measurement<double>.Suspect(percent, MeasurementSource.Derived)
+            : retention;
     }
+
+    /// <summary>Whether a retention percentage is within the physically plausible band.</summary>
+    public static bool IsPlausibleRetention(double percent) =>
+        double.IsFinite(percent)
+        && percent >= MinPlausibleRetentionPercent
+        && percent <= MaxPlausibleRetentionPercent;
 
     /// <summary>
     /// Electric current: power divided by voltage (C11). Always

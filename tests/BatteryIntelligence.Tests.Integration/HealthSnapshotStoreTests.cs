@@ -28,7 +28,7 @@ public sealed class HealthSnapshotStoreTests
         HealthSnapshotRow row = Assert.Single(history);
         Assert.Equal(82.0, row.RetentionPercent);
         Assert.Equal(score.Score, row.HealthScore);
-        Assert.Equal("HealthScoreV1", row.AlgorithmVersion);
+        Assert.Equal(HealthScoreCalculator.Version, row.AlgorithmVersion);
     }
 
     [Fact]

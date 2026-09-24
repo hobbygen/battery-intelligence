@@ -312,7 +312,7 @@ public sealed partial class BatteryViewModel : ObservableObject, IDisposable
         [
             .. health.Factors.Select(f => new HealthFactorRow(
                 f.Label,
-                f.Contributed ? $"{f.NormalisedWeight * 100:F0}% weight" : "weight redistributed",
+                DescribeInfluence(f),
                 f.Score01 is double s ? $"{s * 100:F0}/100" : "—",
                 f.Basis,
                 f.Contributed)),
@@ -326,6 +326,23 @@ public sealed partial class BatteryViewModel : ObservableObject, IDisposable
             : "The 90-day degradation trend needs about a month of health history — collecting it now.";
 
         _ = LoadRetentionSparkAsync();
+    }
+
+    /// <summary>
+    /// How a factor enters the score, for "How this score is calculated". A penalty
+    /// factor takes no share of the weighted mean, so reporting it as "0% weight"
+    /// would read as "ignored" rather than "can only deduct".
+    /// </summary>
+    private static string DescribeInfluence(HealthFactor factor)
+    {
+        if (!factor.Contributed)
+        {
+            return factor.Role == HealthFactorRole.Penalty ? "no deduction" : "weight redistributed";
+        }
+
+        return factor.Role == HealthFactorRole.Penalty
+            ? $"up to −{factor.Weight * 100:F0} points"
+            : $"{factor.NormalisedWeight * 100:F0}% weight";
     }
 
     private async Task LoadRetentionSparkAsync()

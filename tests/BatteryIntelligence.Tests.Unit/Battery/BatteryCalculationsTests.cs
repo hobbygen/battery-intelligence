@@ -50,6 +50,62 @@ public sealed class BatteryCalculationsTests
     }
 
     [Fact]
+    public void CalculateRetentionPercent_MilliampsDividedByMilliwattHours_IsSuspect_NotACriticalBattery()
+    {
+        // The unit mix-up this guard exists for: a full-charge capacity read in
+        // milliamp-hours over a design capacity read in milliwatt-hours divides the
+        // real figure by roughly the pack voltage, so a healthy pack surfaces in the
+        // single digits and would otherwise be reported Poor or Critical outright.
+        Measurement<int> full = Measurement<int>.Measured(3_400, MeasurementSource.Wmi);
+        Measurement<int> design = Measurement<int>.Measured(38_000, MeasurementSource.BatteryIoctl);
+
+        Measurement<double> retention = BatteryCalculations.CalculateRetentionPercent(full, design);
+
+        Assert.Equal(DataQuality.Suspect, retention.Quality);
+        Assert.False(retention.IsUsable);
+        // Kept for diagnosis rather than discarded.
+        Assert.True(retention.HasValue);
+    }
+
+    [Fact]
+    public void CalculateRetentionPercent_FarAboveDesign_IsSuspect_NotAPristineBattery()
+    {
+        // The same mix-up inverted, which is what let a worn pack score Excellent:
+        // clamped to 100% it reads as a battery in perfect condition.
+        Measurement<int> full = Measurement<int>.Measured(38_000, MeasurementSource.Wmi);
+        Measurement<int> design = Measurement<int>.Measured(3_400, MeasurementSource.BatteryIoctl);
+
+        Measurement<double> retention = BatteryCalculations.CalculateRetentionPercent(full, design);
+
+        Assert.Equal(DataQuality.Suspect, retention.Quality);
+        Assert.False(retention.IsUsable);
+    }
+
+    [Theory]
+    [InlineData(15.0, true)]
+    [InlineData(40.0, true)]
+    [InlineData(103.0, true)]
+    [InlineData(125.0, true)]
+    [InlineData(14.9, false)]
+    [InlineData(125.1, false)]
+    [InlineData(double.NaN, false)]
+    public void IsPlausibleRetention_AcceptsRealPacks_AndRejectsUnitMixUps(double percent, bool expected) =>
+        Assert.Equal(expected, BatteryCalculations.IsPlausibleRetention(percent));
+
+    [Fact]
+    public void CalculateRetentionPercent_SlightlyOverDesign_StaysCalculated()
+    {
+        // A new pack reading just over its rated capacity is ordinary, not a fault.
+        Measurement<int> full = Measurement<int>.Measured(96_500, MeasurementSource.WinRtBattery);
+        Measurement<int> design = Measurement<int>.Measured(95_008, MeasurementSource.WinRtBattery);
+
+        Measurement<double> retention = BatteryCalculations.CalculateRetentionPercent(full, design);
+
+        Assert.Equal(DataQuality.Calculated, retention.Quality);
+        Assert.True(retention.IsUsable);
+    }
+
+    [Fact]
     public void CalculateCurrentMa_IsAlwaysCalculated_NeverMeasured()
     {
         // docs/capability-matrix.md: C11 must never be promoted to Measured even

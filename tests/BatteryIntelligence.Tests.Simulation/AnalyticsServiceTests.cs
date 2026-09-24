@@ -27,7 +27,7 @@ public sealed class AnalyticsServiceTests
         await service.RefreshAsync();
 
         HealthSnapshotRow snapshot = Assert.Single(health.Rows);
-        Assert.Equal("HealthScoreV1", snapshot.AlgorithmVersion);
+        Assert.Equal(HealthScoreCalculator.Version, snapshot.AlgorithmVersion);
         Assert.NotNull(snapshot.HealthScore);
 
         // Cycle count and temperature both absent → the score's contributing weights renormalise to 1.

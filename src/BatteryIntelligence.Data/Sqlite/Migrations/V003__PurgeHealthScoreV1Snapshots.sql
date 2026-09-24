@@ -1,0 +1,43 @@
+-- V003: remove every battery-health snapshot written by the HealthScoreV1
+-- pipeline. See docs/database.md section 7 and CHANGELOG "Unreleased".
+--
+-- Why this is a delete rather than a recompute.
+--
+-- V1 snapshots came from a provider that could pair a full-charge capacity read
+-- in milliamp-hours with a design capacity read in milliwatt-hours, because the
+-- unit flag was taken from one source and applied to values selected from
+-- another. Capacity retention is one divided by the other, so an affected row's
+-- RetentionPercent — and the FullChargeMwh beside it — is out by roughly the
+-- pack voltage. Nothing stored in the row says whether it was affected: the
+-- ratio alone cannot distinguish a worn pack from a correctly-read healthy one
+-- scaled by 11, and the raw source values were never persisted, so there is no
+-- way to recompute a corrected figure after the fact.
+--
+-- Those rows are the input to the 90-day degradation trend, which is fitted over
+-- a 180-day window, so leaving them in place would bend the trend — and the
+-- health score built on it — for six months. A snapshot that cannot be trusted
+-- and cannot be repaired is worse than no snapshot: the app's own rule is that
+-- an unavailable figure is a complete answer, while a plausible-looking wrong
+-- one is not (specification section 3).
+--
+-- Cost: the degradation trend goes unavailable until about 30 days of fresh
+-- snapshots accumulate, and the retention sparkline starts empty. The app states
+-- both as "collecting it now" rather than showing a blank chart.
+--
+-- Scope: BatteryHealthSnapshot only.
+--   * Raw battery samples are untouched — they hold measured percentage, voltage
+--     and rate, none of which this defect affected.
+--   * Insights are replaced wholesale on every analytics pass, so they recover
+--     without help here.
+--   * Alerts are left alone: they are a record of what the application told the
+--     user at the time, which stays true whether or not the reading behind it did.
+--
+-- The migrator copies the database to <db>.bak-v003 before this runs, so the
+-- discarded rows remain recoverable from that file.
+--
+-- Matching on AlgorithmVersion, not on a plausibility range: the version tag is
+-- exactly "written by the pipeline with the defect", which is the set being
+-- removed. Later algorithm versions are written by the corrected provider and
+-- must survive this migration unchanged.
+
+DELETE FROM BatteryHealthSnapshot WHERE AlgorithmVersion = 'HealthScoreV1';
