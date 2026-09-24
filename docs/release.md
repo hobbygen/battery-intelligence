@@ -154,6 +154,18 @@ running** → process killed, install dir and uninstall key removed,
 
 ### Publishing a release
 
+**Build the artifact from the tagged commit.** The binary embeds the commit it was
+built from (`ProductVersion` reads `1.1.0+<sha>`), so an installer compiled before
+the release commit exists points at that commit's parent and no longer traces to
+the tag. Commit and tag the version bump first, then run the build.
+
+That leaves one unavoidable ordering wrinkle: `website/index.html` publishes the
+installer's SHA-256, which cannot be known until the installer is built, which
+needs the commit that would contain it. The hash therefore lands in a follow-up
+commit **after** the tag — the tag marks the source the binary was built from, and
+the website catches up. The authoritative checksum is `dist/SHA256SUMS.txt`,
+published with the release; the page merely repeats it.
+
 1. `powershell -ExecutionPolicy Bypass -File tools/build-installer.ps1`
    (publishes self-contained, compiles the installer, writes `dist/SHA256SUMS.txt`).
 2. Re-zip the self-contained folder if you ship that too:
