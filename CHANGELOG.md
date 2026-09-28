@@ -3,6 +3,19 @@
 All notable changes to Battery Intelligence. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- **Voice alerts.** A spoken clip plays when the battery reaches full and when it
+  is low or critical and needs the charger. Alerts → Voice alerts picks the clip
+  for each (with a play button to preview), sets the volume, or turns voices off.
+  Works even when Windows notifications are off; when a voice plays, the toast's
+  own chime is muted so the two never overlap, and only one clip plays per
+  evaluation (critical outranks low). Clips ship in the `Sounds` folder next to the
+  app — any `Full_Batt_N` / `Low_Batt_N` `.wav` or `.mp3` added there shows up in
+  the picker.
+
 ## 1.1.0 — 2026-09-25
 
 A correctness release for the Battery Health Score. If you run 1.0.0, the score

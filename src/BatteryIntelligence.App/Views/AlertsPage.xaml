@@ -121,8 +121,64 @@
                                             IsOn="{x:Bind ViewModel.NotificationsEnabled, Mode=TwoWay}" />
                         <controls:ToggleRow Header="Windows notifications" Description="Show a system toast. Falls back to the in-app centre if unavailable."
                                             IsOn="{x:Bind ViewModel.UseWindowsNotifications, Mode=TwoWay}" />
-                        <controls:ToggleRow Header="Play a sound" Description="Only affects the Windows notification."
+                        <controls:ToggleRow Header="Play a sound" Description="Only affects the Windows notification. Muted when a voice alert plays instead."
                                             IsOn="{x:Bind ViewModel.PlaySound, Mode=TwoWay}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Voice alerts -->
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="10">
+                        <controls:CardHeader Glyph="&#xE767;" Text="VOICE ALERTS" />
+                        <controls:ToggleRow Header="Speak battery alerts" Description="Play a voice when the battery is full, and when it is low or critical and needs the charger. Works even with Windows notifications off."
+                                            IsOn="{x:Bind ViewModel.VoiceAlertsEnabled, Mode=TwoWay}" />
+                        <TextBlock
+                            Visibility="{x:Bind ViewModel.NoVoiceClips}"
+                            Foreground="{ThemeResource AppText2Brush}"
+                            TextWrapping="Wrap"
+                            Text="No voice clips are installed. Put Full_Batt_N and Low_Batt_N .wav or .mp3 files in the Sounds folder next to the app." />
+
+                        <Grid ColumnSpacing="10" RowSpacing="10" Visibility="{x:Bind ViewModel.HasVoiceClips}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" MaxWidth="320" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <ComboBox Grid.Row="0" Grid.Column="0" HorizontalAlignment="Stretch"
+                                      Header="Battery full"
+                                      DisplayMemberPath="DisplayName"
+                                      IsEnabled="{x:Bind ViewModel.VoiceAlertsEnabled, Mode=OneWay}"
+                                      ItemsSource="{x:Bind ViewModel.FullChargeClips}"
+                                      SelectedItem="{x:Bind ViewModel.SelectedFullChargeClip, Mode=TwoWay}" />
+                            <Button Grid.Row="0" Grid.Column="1" VerticalAlignment="Bottom"
+                                    AutomationProperties.Name="Play the battery full voice"
+                                    ToolTipService.ToolTip="Play"
+                                    Command="{x:Bind ViewModel.PreviewFullChargeCommand}">
+                                <FontIcon FontSize="14" Glyph="&#xE768;" />
+                            </Button>
+
+                            <ComboBox Grid.Row="1" Grid.Column="0" HorizontalAlignment="Stretch"
+                                      Header="Needs charger (low or critical)"
+                                      DisplayMemberPath="DisplayName"
+                                      IsEnabled="{x:Bind ViewModel.VoiceAlertsEnabled, Mode=OneWay}"
+                                      ItemsSource="{x:Bind ViewModel.NeedsChargerClips}"
+                                      SelectedItem="{x:Bind ViewModel.SelectedNeedsChargerClip, Mode=TwoWay}" />
+                            <Button Grid.Row="1" Grid.Column="1" VerticalAlignment="Bottom"
+                                    AutomationProperties.Name="Play the needs charger voice"
+                                    ToolTipService.ToolTip="Play"
+                                    Command="{x:Bind ViewModel.PreviewNeedsChargerCommand}">
+                                <FontIcon FontSize="14" Glyph="&#xE768;" />
+                            </Button>
+                        </Grid>
+
+                        <Slider Header="Voice volume" Minimum="0" Maximum="100" TickFrequency="10" MaxWidth="360" HorizontalAlignment="Left"
+                                Visibility="{x:Bind ViewModel.HasVoiceClips}"
+                                IsEnabled="{x:Bind ViewModel.VoiceAlertsEnabled, Mode=OneWay}"
+                                Value="{x:Bind ViewModel.VoiceVolumePercent, Mode=TwoWay}" />
                     </StackPanel>
                 </Border>
 

@@ -1,3 +1,4 @@
+using BatteryIntelligence.Core.Alerts;
 using BatteryIntelligence.Core.Diagnostics;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Notifications;
@@ -96,12 +97,96 @@ public sealed class AlertMonitoringServiceTests
         await h.Service.StopAsync(CancellationToken.None);
     }
 
+    [Fact]
+    public async Task ReachingFull_SpeaksTheSelectedFullChargeVoice_AndMutesTheToastChime()
+    {
+        Harness h = await Harness.CreateAsync();
+        h.Settings.Current.Notifications.PlaySound = true;
+        h.Settings.Current.Notifications.FullChargeVoice = "Full_Batt_3.wav";
+        h.Settings.Current.Notifications.VoiceVolumePercent = 70;
+
+        h.Battery.PushState(Start, BatteryState.Charging, 95, ac: true);
+        await h.Service.RefreshAsync();
+        h.Battery.PushState(Start.AddMinutes(5), BatteryState.Charging, 100, ac: true);
+        await h.Service.RefreshAsync();
+
+        Assert.Contains(h.Store.Rows, r => r.Type == AlertType.FullyCharged);
+        (VoiceAlertCue cue, string? file, int volume) = Assert.Single(h.Voice.Played);
+        Assert.Equal(VoiceAlertCue.FullyCharged, cue);
+        Assert.Equal("Full_Batt_3.wav", file);
+        Assert.Equal(70, volume);
+        Assert.All(h.Presenter.PlaySoundRequests, requested => Assert.False(requested));
+
+        await h.Service.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task LowAndCriticalTogether_SpeakOnce_WithTheNeedsChargerVoice()
+    {
+        Harness h = await Harness.CreateAsync();
+        h.Settings.Current.Alerts.LowBatteryPercent = 20;
+        h.Settings.Current.Alerts.CriticalBatteryPercent = 10;
+        h.Settings.Current.Notifications.NeedsChargerVoice = "Low_Batt_2.wav";
+
+        h.Battery.PushState(Start, BatteryState.Discharging, 30, ac: false);
+        await h.Service.RefreshAsync();
+        h.Battery.PushState(Start.AddMinutes(1), BatteryState.Discharging, 8, ac: false);
+        await h.Service.RefreshAsync();
+
+        Assert.True(h.Store.Rows.Count >= 1);
+        (VoiceAlertCue cue, string? file, _) = Assert.Single(h.Voice.Played);
+        Assert.Equal(VoiceAlertCue.NeedsCharger, cue);
+        Assert.Equal("Low_Batt_2.wav", file);
+
+        await h.Service.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task VoiceDisabled_PlaysNothing_AndLeavesTheToastChimeAlone()
+    {
+        Harness h = await Harness.CreateAsync();
+        h.Settings.Current.Notifications.VoiceAlertsEnabled = false;
+        h.Settings.Current.Notifications.PlaySound = true;
+        h.Settings.Current.Alerts.LowBatteryPercent = 20;
+
+        h.Battery.PushState(Start, BatteryState.Discharging, 30, ac: false);
+        await h.Service.RefreshAsync();
+        h.Battery.PushState(Start.AddMinutes(1), BatteryState.Discharging, 18, ac: false);
+        await h.Service.RefreshAsync();
+
+        Assert.Single(h.Store.Rows);
+        Assert.Empty(h.Voice.Played);
+        Assert.Equal(new[] { true }, h.Presenter.PlaySoundRequests);
+
+        await h.Service.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task AVoiceFailure_DoesNotFailTheAlert()
+    {
+        Harness h = await Harness.CreateAsync();
+        h.Voice.ThrowOnPlay = true;
+        h.Settings.Current.Alerts.LowBatteryPercent = 20;
+
+        h.Battery.PushState(Start, BatteryState.Discharging, 30, ac: false);
+        await h.Service.RefreshAsync();
+        h.Battery.PushState(Start.AddMinutes(1), BatteryState.Discharging, 18, ac: false);
+        await h.Service.RefreshAsync();
+
+        Assert.Single(h.Store.Rows);
+        Assert.Equal(1, h.Service.UnacknowledgedCount);
+        Assert.Null(h.Service.LastError);
+
+        await h.Service.StopAsync(CancellationToken.None);
+    }
+
     private sealed class Harness
     {
         public required AlertMonitoringService Service { get; init; }
         public required AnalyticsFakeBattery Battery { get; init; }
         public required FakeAlertStore Store { get; init; }
         public required FakePresenter Presenter { get; init; }
+        public required FakeVoicePlayer Voice { get; init; }
         public required AnalyticsFakeSettings Settings { get; init; }
 
         public static async Task<Harness> CreateAsync()
@@ -109,6 +194,7 @@ public sealed class AlertMonitoringServiceTests
             AnalyticsFakeBattery battery = new();
             FakeAlertStore store = new();
             FakePresenter presenter = new();
+            FakeVoicePlayer voice = new();
             AnalyticsFakeSettings settings = new();
 
             AlertMonitoringService service = new(
@@ -118,12 +204,13 @@ public sealed class AlertMonitoringServiceTests
                 new FakeRuntimeEstimationService(),
                 store,
                 presenter,
+                voice,
                 settings,
                 NullLogger<AlertMonitoringService>.Instance,
                 new MonitoringStatusRegistry());
 
             await service.StartAsync(CancellationToken.None);
-            return new Harness { Service = service, Battery = battery, Store = store, Presenter = presenter, Settings = settings };
+            return new Harness { Service = service, Battery = battery, Store = store, Presenter = presenter, Voice = voice, Settings = settings };
         }
     }
 }

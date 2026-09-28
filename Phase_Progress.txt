@@ -892,6 +892,29 @@ Post-1.0 candidates (not blockers): reduce working set; a full app-wide
 read-only mode for a corrupt DB; a Settings toggle for Monitoring.Paused;
 per-value estimation hover on the remaining pages; custom History date ranges.
 
+POST-1.1 — Voice alerts (2026-09-28)
+------------------------------------------------------------
+Spoken clips for "battery full" and "needs charger" (low + critical).
+- Core.Alerts.VoiceAlertCues (pure): AlertType -> VoiceAlertCue
+  {FullyCharged, NeedsCharger} + priority (critical > low > full).
+  Core.Interfaces.IVoiceAlertPlayer + VoiceClip record.
+- NotificationSettings: VoiceAlertsEnabled (default on), FullChargeVoice,
+  NeedsChargerVoice (bare file names; Validate strips any path), VoiceVolumePercent.
+- AlertMonitoringService: after persisting, speaks ONE clip per evaluation
+  (highest-priority voiced alert); mutes the toast chime when a voice plays; a
+  voice failure is logged at Debug and never fails the alert (same contract as
+  the toast). Independent of UseWindowsNotifications.
+- App/Services/VoiceAlertPlayer: the only file touching Windows.Media.Playback.
+  Clips live in repo-root sounds/, linked by App.csproj into <exe>\Sounds\
+  (so the installer, which recurses the publish dir, ships them). Discovery is by
+  file name pattern Full_Batt_N / Low_Batt_N (.wav/.mp3), labelled "Voice N".
+- Alerts page: new VOICE ALERTS card — toggle, two clip pickers with play
+  buttons, volume slider; honest empty state if no clips are installed.
+- Tests: VoiceAlertCuesTests (unit), 4 new AlertMonitoringServiceTests (simulation).
+Verified 2026-09-28: Debug build 0 warnings / 0 errors; 415 tests pass
+(301 + 45 + 69); all 8 clips copied to <exe>\Sounds\. Confirmed by the user in
+the running app: the Alerts-page pickers work and the clips play.
+
 ============================================================
 PROJECT STRUCTURE QUICK MAP (for when you do need to open files)
 ============================================================

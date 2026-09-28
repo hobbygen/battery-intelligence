@@ -247,14 +247,51 @@ public sealed class NotificationSettings
 
     public bool PlaySound { get; set; }
 
+    /// <summary>
+    /// Speak a voice clip when the battery is full or needs the charger (low or
+    /// critical). Independent of the toast, so it works even when Windows
+    /// notifications are off or unavailable.
+    /// </summary>
+    public bool VoiceAlertsEnabled { get; set; } = true;
+
+    /// <summary>File name of the "battery full" clip in the app's Sounds folder.</summary>
+    public string FullChargeVoice { get; set; } = DefaultFullChargeVoice;
+
+    /// <summary>File name of the "connect the charger" clip in the app's Sounds folder.</summary>
+    public string NeedsChargerVoice { get; set; } = DefaultNeedsChargerVoice;
+
+    /// <summary>Voice clip volume, 0–100.</summary>
+    public int VoiceVolumePercent { get; set; } = 100;
+
+    public const string DefaultFullChargeVoice = "Full_Batt_1.wav";
+
+    public const string DefaultNeedsChargerVoice = "Low_Batt_1.wav";
+
     public void Validate()
     {
+        VoiceVolumePercent = Math.Clamp(VoiceVolumePercent, 0, 100);
+
+        // Only a bare file name is ever stored — never a path out of the Sounds folder.
+        FullChargeVoice = SafeFileName(FullChargeVoice, DefaultFullChargeVoice);
+        NeedsChargerVoice = SafeFileName(NeedsChargerVoice, DefaultNeedsChargerVoice);
+
         // If every delivery channel is disabled, alerts would fire silently into
         // nothing. Keep the in-app centre as the floor.
         if (Enabled && !UseWindowsNotifications && !UseInAppAlerts)
         {
             UseInAppAlerts = true;
         }
+    }
+
+    private static string SafeFileName(string? value, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return fallback;
+        }
+
+        string name = Path.GetFileName(value.Trim());
+        return name.Length == 0 || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ? fallback : name;
     }
 }
 

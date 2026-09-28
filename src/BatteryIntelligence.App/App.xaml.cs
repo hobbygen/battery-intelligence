@@ -338,6 +338,7 @@ public partial class App : Application
         // in-app centre silently (spec §21).
         services.AddSingleton<WindowsToastPresenter>();
         services.AddSingleton<INotificationPresenter>(sp => sp.GetRequiredService<WindowsToastPresenter>());
+        services.AddSingleton<IVoiceAlertPlayer, VoiceAlertPlayer>();
         services.AddSingleton<AlertMonitoringService>();
         services.AddSingleton<IAlertMonitoringService>(sp => sp.GetRequiredService<AlertMonitoringService>());
         services.AddHostedService(sp => sp.GetRequiredService<AlertMonitoringService>());

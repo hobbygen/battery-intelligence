@@ -1,4 +1,5 @@
 using System.Globalization;
+using BatteryIntelligence.Core.Alerts;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Interfaces;
 using BatteryIntelligence.Core.Models;
@@ -26,20 +27,26 @@ public sealed partial class AlertsViewModel : ObservableObject, IDisposable
 {
     private readonly IAlertMonitoringService _alerts;
     private readonly ISettingsService _settings;
+    private readonly IVoiceAlertPlayer _voice;
     private readonly DispatcherQueue _dispatcher;
 
     private IReadOnlyList<AlertDisplayRow> _active = [];
     private IReadOnlyList<AlertDisplayRow> _history = [];
     private string _notificationChannel = "Checking…";
 
-    public AlertsViewModel(IAlertMonitoringService alerts, ISettingsService settings)
+    public AlertsViewModel(IAlertMonitoringService alerts, ISettingsService settings, IVoiceAlertPlayer voice)
     {
         ArgumentNullException.ThrowIfNull(alerts);
         ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(voice);
 
         _alerts = alerts;
         _settings = settings;
+        _voice = voice;
         _dispatcher = DispatcherQueue.GetForCurrentThread();
+
+        FullChargeClips = voice.GetClips(VoiceAlertCue.FullyCharged);
+        NeedsChargerClips = voice.GetClips(VoiceAlertCue.NeedsCharger);
 
         _alerts.Updated += OnAlertsUpdated;
         Apply();
@@ -110,6 +117,74 @@ public sealed partial class AlertsViewModel : ObservableObject, IDisposable
             OnPropertyChanged();
         }
     }
+
+    // --- Voice alerts ---------------------------------------------------
+
+    public bool VoiceAlertsEnabled
+    {
+        get => _settings.Current.Notifications.VoiceAlertsEnabled;
+        set
+        {
+            if (value == VoiceAlertsEnabled) { return; }
+            _ = _settings.UpdateAsync(s => s.Notifications.VoiceAlertsEnabled = value, "Notifications");
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>The "battery full" clips found in the Sounds folder.</summary>
+    public IReadOnlyList<VoiceClip> FullChargeClips { get; }
+
+    /// <summary>The "connect the charger" clips found in the Sounds folder.</summary>
+    public IReadOnlyList<VoiceClip> NeedsChargerClips { get; }
+
+    public bool HasVoiceClips => FullChargeClips.Count > 0 || NeedsChargerClips.Count > 0;
+
+    public bool NoVoiceClips => !HasVoiceClips;
+
+    public VoiceClip? SelectedFullChargeClip
+    {
+        get => Find(FullChargeClips, _settings.Current.Notifications.FullChargeVoice);
+        set
+        {
+            if (value is null || value == SelectedFullChargeClip) { return; }
+            _ = _settings.UpdateAsync(s => s.Notifications.FullChargeVoice = value.FileName, "Notifications");
+            OnPropertyChanged();
+        }
+    }
+
+    public VoiceClip? SelectedNeedsChargerClip
+    {
+        get => Find(NeedsChargerClips, _settings.Current.Notifications.NeedsChargerVoice);
+        set
+        {
+            if (value is null || value == SelectedNeedsChargerClip) { return; }
+            _ = _settings.UpdateAsync(s => s.Notifications.NeedsChargerVoice = value.FileName, "Notifications");
+            OnPropertyChanged();
+        }
+    }
+
+    public int VoiceVolumePercent
+    {
+        get => _settings.Current.Notifications.VoiceVolumePercent;
+        set
+        {
+            if (value == VoiceVolumePercent) { return; }
+            _ = _settings.UpdateAsync(s => s.Notifications.VoiceVolumePercent = value, "Notifications");
+            OnPropertyChanged();
+        }
+    }
+
+    [RelayCommand]
+    private Task PreviewFullChargeAsync() =>
+        _voice.PlayAsync(VoiceAlertCue.FullyCharged, SelectedFullChargeClip?.FileName, VoiceVolumePercent);
+
+    [RelayCommand]
+    private Task PreviewNeedsChargerAsync() =>
+        _voice.PlayAsync(VoiceAlertCue.NeedsCharger, SelectedNeedsChargerClip?.FileName, VoiceVolumePercent);
+
+    /// <summary>The stored clip, or the first one when the stored file is no longer installed (playback falls back the same way).</summary>
+    private static VoiceClip? Find(IReadOnlyList<VoiceClip> clips, string fileName) =>
+        clips.FirstOrDefault(c => string.Equals(c.FileName, fileName, StringComparison.OrdinalIgnoreCase)) ?? clips.FirstOrDefault();
 
     /// <summary>"Windows notifications + in-app centre" / "In-app centre only (Windows notifications unavailable)".</summary>
     public string NotificationChannel

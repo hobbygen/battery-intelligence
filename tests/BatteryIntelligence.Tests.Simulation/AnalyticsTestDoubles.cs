@@ -1,3 +1,4 @@
+using BatteryIntelligence.Core.Alerts;
 using BatteryIntelligence.Core.Configuration;
 using BatteryIntelligence.Core.Enums;
 using BatteryIntelligence.Core.Interfaces;
@@ -269,6 +270,26 @@ internal sealed class FakeAlertStore : IAlertStore
     }
 }
 
+internal sealed class FakeVoicePlayer : IVoiceAlertPlayer
+{
+    public bool ThrowOnPlay { get; set; }
+
+    public List<(VoiceAlertCue Cue, string? FileName, int Volume)> Played { get; } = [];
+
+    public IReadOnlyList<VoiceClip> GetClips(VoiceAlertCue cue) => [];
+
+    public Task<bool> PlayAsync(VoiceAlertCue cue, string? fileName, int volumePercent, CancellationToken cancellationToken = default)
+    {
+        Played.Add((cue, fileName, volumePercent));
+        if (ThrowOnPlay)
+        {
+            throw new InvalidOperationException("simulated audio failure");
+        }
+
+        return Task.FromResult(true);
+    }
+}
+
 internal sealed class FakePresenter : INotificationPresenter
 {
     public bool IsAvailable { get; set; } = true;
@@ -279,9 +300,12 @@ internal sealed class FakePresenter : INotificationPresenter
 
     public int ShowCount { get; private set; }
 
+    public List<bool> PlaySoundRequests { get; } = [];
+
     public Task<bool> ShowAsync(Alert alert, bool playSound, CancellationToken cancellationToken = default)
     {
         ShowCount++;
+        PlaySoundRequests.Add(playSound);
         if (ThrowOnShow)
         {
             throw new InvalidOperationException("simulated toast failure");

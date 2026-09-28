@@ -33,6 +33,7 @@ public sealed class AlertMonitoringService : IAlertMonitoringService, IHostedSer
     private readonly IRuntimeEstimationService _runtime;
     private readonly IAlertStore _alertStore;
     private readonly INotificationPresenter _presenter;
+    private readonly IVoiceAlertPlayer _voice;
     private readonly ISettingsService _settings;
     private readonly ILogger<AlertMonitoringService> _logger;
     private readonly IMonitoringStatusRegistry _status;
@@ -53,6 +54,7 @@ public sealed class AlertMonitoringService : IAlertMonitoringService, IHostedSer
         IRuntimeEstimationService runtime,
         IAlertStore alertStore,
         INotificationPresenter presenter,
+        IVoiceAlertPlayer voice,
         ISettingsService settings,
         ILogger<AlertMonitoringService> logger,
         IMonitoringStatusRegistry status)
@@ -63,6 +65,7 @@ public sealed class AlertMonitoringService : IAlertMonitoringService, IHostedSer
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(alertStore);
         ArgumentNullException.ThrowIfNull(presenter);
+        ArgumentNullException.ThrowIfNull(voice);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(status);
@@ -73,6 +76,7 @@ public sealed class AlertMonitoringService : IAlertMonitoringService, IHostedSer
         _runtime = runtime;
         _alertStore = alertStore;
         _presenter = presenter;
+        _voice = voice;
         _settings = settings;
         _logger = logger;
         _status = status;
@@ -243,6 +247,20 @@ public sealed class AlertMonitoringService : IAlertMonitoringService, IHostedSer
                 return;
             }
 
+            // At most one voice clip per evaluation (critical outranks low, low
+            // outranks full) so two clips never talk over each other. When a voice
+            // will play, the toast's own chime is muted for the same reason.
+            Alert? voiced = null;
+            if (notifications.Enabled && notifications.VoiceAlertsEnabled)
+            {
+                voiced = fired
+                    .Where(a => VoiceAlertCues.For(a.Type) is not null)
+                    .OrderByDescending(a => VoiceAlertCues.Priority(a.Type))
+                    .FirstOrDefault();
+            }
+
+            bool voicedPersisted = false;
+
             foreach (Alert alert in fired)
             {
                 long id;
@@ -257,6 +275,7 @@ public sealed class AlertMonitoringService : IAlertMonitoringService, IHostedSer
                 }
 
                 Alert stored = alert with { Id = id };
+                voicedPersisted |= ReferenceEquals(alert, voiced);
                 lock (_sync)
                 {
                     List<Alert> updated = new(_recentAlerts.Count + 1) { stored };
@@ -277,7 +296,7 @@ public sealed class AlertMonitoringService : IAlertMonitoringService, IHostedSer
                 {
                     try
                     {
-                        bool delivered = await _presenter.ShowAsync(stored, notifications.PlaySound).ConfigureAwait(false);
+                        bool delivered = await _presenter.ShowAsync(stored, notifications.PlaySound && voiced is null).ConfigureAwait(false);
                         if (!delivered)
                         {
                             _logger.LogDebug("OS notification not delivered for {Type}; the in-app alert stands.", alert.Type);
@@ -290,6 +309,11 @@ public sealed class AlertMonitoringService : IAlertMonitoringService, IHostedSer
                     }
                 }
             }
+
+            if (voiced is not null && voicedPersisted)
+            {
+                await SpeakAsync(voiced.Type, notifications).ConfigureAwait(false);
+            }
         }
         catch (Exception ex)
         {
@@ -300,6 +324,29 @@ public sealed class AlertMonitoringService : IAlertMonitoringService, IHostedSer
         finally
         {
             _evalGate.Release();
+        }
+    }
+
+    private async Task SpeakAsync(AlertType type, NotificationSettings notifications)
+    {
+        if (VoiceAlertCues.For(type) is not { } cue)
+        {
+            return;
+        }
+
+        string clip = cue == VoiceAlertCue.FullyCharged ? notifications.FullChargeVoice : notifications.NeedsChargerVoice;
+        try
+        {
+            bool played = await _voice.PlayAsync(cue, clip, notifications.VoiceVolumePercent).ConfigureAwait(false);
+            if (!played)
+            {
+                _logger.LogDebug("Voice alert not played for {Type}; the alert stands.", type);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Same contract as the toast: a voice failure never fails the alert.
+            _logger.LogDebug(ex, "Voice alert failed for {Type}; the alert stands.", type);
         }
     }
 

@@ -63,6 +63,8 @@
 
   <ItemGroup>
     <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Voice alert clips (repo-root sounds/), shipped as Sounds\ next to the exe. -->
+    <Content Include="..\..\sounds\*.wav;..\..\sounds\*.mp3" Link="Sounds\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- Never treat the MSIX manifest as content in an unpackaged build. -->
     <None Remove="Package.appxmanifest" Condition="'$(EnablePackaging)' != 'true'" />
   </ItemGroup>
