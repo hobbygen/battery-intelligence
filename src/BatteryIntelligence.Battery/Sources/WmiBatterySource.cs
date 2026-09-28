@@ -120,13 +120,8 @@ public sealed class WmiBatterySource : IRawBatterySource
         uint? chargeRate = ReadUInt32(status, "ChargeRate");
         uint? dischargeRate = ReadUInt32(status, "DischargeRate");
 
-        Measurement<int> power = (charging, discharging) switch
-        {
-            (true, _) when chargeRate is uint cr => Measurement<int>.Measured((int)cr, SourceId),
-            (_, true) when dischargeRate is uint dr => Measurement<int>.Measured(-(int)dr, SourceId),
-            (false, false) => Measurement<int>.Measured(0, SourceId),
-            _ => Measurement<int>.Unavailable(SourceId),
-        };
+        Measurement<int> power = BatteryCalculations.SignedRateFromChargeDischarge(
+            charging, discharging, chargeRate, dischargeRate, SourceId);
 
         BatteryState? state = (charging, discharging) switch
         {

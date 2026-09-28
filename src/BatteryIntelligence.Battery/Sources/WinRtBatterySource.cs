@@ -109,6 +109,9 @@ public sealed class WinRtBatterySource : IRawBatterySource
         return new RawBatteryEntry(device, reading);
     }
 
+    // int.MinValue is 0x80000000 (quirk Q3's unknown sentinel) seen through a signed
+    // field; -1 is NOT filtered here because the charge rate is signed and -1 mW is
+    // a real (if tiny) discharge.
     private Measurement<int> ToMeasurement(int? value) =>
-        value is int v ? Measurement<int>.Measured(v, SourceId) : Measurement<int>.Unavailable(SourceId);
+        value is int v && v != int.MinValue ? Measurement<int>.Measured(v, SourceId) : Measurement<int>.Unavailable(SourceId);
 }

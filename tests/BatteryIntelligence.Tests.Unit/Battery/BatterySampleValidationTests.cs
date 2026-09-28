@@ -95,6 +95,21 @@ public sealed class BatterySampleValidationTests
         Assert.InRange(result.Percentage.Value!.Value, 0.0, 100.0);
     }
 
+    [Theory]
+    [InlineData(int.MinValue)]
+    [InlineData(int.MaxValue)]
+    public void ApplyPlausibilityChecks_ExtremePower_IsGradedSuspect_WithoutThrowing(int powerMw)
+    {
+        // Regression: Math.Abs(int.MinValue) threw OverflowException and failed the
+        // whole battery read (seen live when WMI reported BATTERY_UNKNOWN_RATE).
+        BatteryInfo info = MakeInfo(55.0, 11_693, 32.0, powerMw, 30_000, 38_008);
+
+        BatteryInfo result = BatterySampleValidation.ApplyPlausibilityChecks(info);
+
+        Assert.Equal(DataQuality.Suspect, result.PowerMw.Quality);
+        Assert.Equal(DataQuality.Measured, result.Percentage.Quality);
+    }
+
     [Fact]
     public void ApplyPlausibilityChecks_UnavailableFields_StayUnavailable_NeverBecomeSuspect()
     {

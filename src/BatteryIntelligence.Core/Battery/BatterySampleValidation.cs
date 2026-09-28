@@ -61,7 +61,9 @@ public static class BatterySampleValidation
         }
 
         Measurement<int> power = info.PowerMw;
-        if (power.HasValue && Math.Abs(power.Value!.Value) > MaxPlausibleRateMw)
+        // Widened to long: Math.Abs(int.MinValue) throws, and one bad field must
+        // re-grade that field, never fail the whole reading.
+        if (power.HasValue && Math.Abs((long)power.Value!.Value) > MaxPlausibleRateMw)
         {
             power = ToSuspect(power);
         }

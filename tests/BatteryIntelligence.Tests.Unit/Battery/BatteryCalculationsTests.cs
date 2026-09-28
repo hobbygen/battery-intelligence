@@ -13,6 +13,38 @@ namespace BatteryIntelligence.Tests.Unit.Battery;
 /// </summary>
 public sealed class BatteryCalculationsTests
 {
+    [Theory]
+    [InlineData(true, false, 8_442u, null, 8_442)]
+    [InlineData(false, true, null, 8_442u, -8_442)]
+    public void SignedRateFromChargeDischarge_SignsByDirection(bool charging, bool discharging, uint? charge, uint? discharge, int expected)
+    {
+        Measurement<int> rate = BatteryCalculations.SignedRateFromChargeDischarge(charging, discharging, charge, discharge, MeasurementSource.Wmi);
+
+        Assert.Equal(expected, rate.Value);
+        Assert.Equal(DataQuality.Measured, rate.Quality);
+    }
+
+    [Theory]
+    [InlineData(0x80000000u)] // BATTERY_UNKNOWN_RATE — seen live around a plug/unplug
+    [InlineData(0xFFFFFFFFu)]
+    [InlineData(0x90000000u)] // past int.MaxValue: not representable as a signed rate
+    public void SignedRateFromChargeDischarge_SentinelOrOverflow_IsUnavailable(uint raw)
+    {
+        Measurement<int> discharging = BatteryCalculations.SignedRateFromChargeDischarge(false, true, null, raw, MeasurementSource.Wmi);
+        Measurement<int> charging = BatteryCalculations.SignedRateFromChargeDischarge(true, false, raw, null, MeasurementSource.Wmi);
+
+        Assert.False(discharging.HasValue);
+        Assert.False(charging.HasValue);
+    }
+
+    [Fact]
+    public void SignedRateFromChargeDischarge_NeitherCharging_NorDischarging_IsZero()
+    {
+        Measurement<int> rate = BatteryCalculations.SignedRateFromChargeDischarge(false, false, 0x80000000u, 0x80000000u, MeasurementSource.Wmi);
+
+        Assert.Equal(0, rate.Value);
+    }
+
     [Fact]
     public void CalculateRetentionPercent_MatchesReferenceMachine()
     {

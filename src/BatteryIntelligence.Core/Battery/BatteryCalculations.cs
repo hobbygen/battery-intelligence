@@ -142,4 +142,29 @@ public static class BatteryCalculations
     /// </summary>
     public static Measurement<int> ApplyCycleCountZeroQuirk(Measurement<int> cycleCount) =>
         cycleCount.Value == 0 ? Measurement<int>.Unavailable(cycleCount.Source) : cycleCount;
+
+    /// <summary>
+    /// Builds the signed rate (positive = charging, negative = discharging) from
+    /// the separate unsigned charge/discharge rates <c>BatteryStatus</c> reports.
+    /// </summary>
+    /// <remarks>
+    /// The rate fields carry quirk Q3's sentinels — <c>0x80000000</c>
+    /// (BATTERY_UNKNOWN_RATE) is common for a moment after the charger is plugged
+    /// in or pulled. Cast and negated it becomes <see cref="int.MinValue"/>, which
+    /// is not a rate and cannot be <see cref="Math.Abs(int)"/>'d, so a sentinel
+    /// (or anything past <see cref="int.MaxValue"/>) is Unavailable, never a number.
+    /// </remarks>
+    public static Measurement<int> SignedRateFromChargeDischarge(
+        bool? charging, bool? discharging, uint? chargeRate, uint? dischargeRate, MeasurementSource source)
+    {
+        static bool Usable(uint? rate) => rate is uint r && !BatterySentinels.IsSentinel(r) && r <= int.MaxValue;
+
+        return (charging, discharging) switch
+        {
+            (true, _) => Usable(chargeRate) ? Measurement<int>.Measured((int)chargeRate!.Value, source) : Measurement<int>.Unavailable(source),
+            (_, true) => Usable(dischargeRate) ? Measurement<int>.Measured(-(int)dischargeRate!.Value, source) : Measurement<int>.Unavailable(source),
+            (false, false) => Measurement<int>.Measured(0, source),
+            _ => Measurement<int>.Unavailable(source),
+        };
+    }
 }
