@@ -30,7 +30,7 @@
 ; Package.appxmanifest — this is the third place the version is written, and it
 ; names the output file, so a stale value ships a correct build under the wrong
 ; name. See docs/release.md section 2.
-#define AppVersion "1.2.0"
+#define AppVersion "1.2.1"
 #define AppPublisher "Naeem Ahmad"
 #define AppPublisherURL "https://battery-intelligence.netlify.app"
 #define AppExeName "BatteryIntelligence.exe"

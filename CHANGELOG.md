@@ -3,6 +3,20 @@
 All notable changes to Battery Intelligence. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## 1.2.1 — 2026-09-28
+
+### Fixed
+
+- **Battery readings could stop updating for a moment around plugging the charger
+  in or out.** Windows briefly reports the charge rate as "unknown" (the value
+  `0x80000000`) at those moments. The WMI source passed that through as a real
+  number, and the plausibility check then crashed trying to take its absolute
+  value — failing the *whole* reading, not just the power figure, so percentage
+  and state froze and Diagnostics showed Retrying until Windows reported a real
+  rate again. An unknown rate is now shown as Unavailable (WMI and WinRT), and the
+  plausibility check can no longer overflow on any value, so one bad field is
+  re-graded Suspect instead of failing the reading. Present since 1.0.0.
+
 ## 1.2.0 — 2026-09-28
 
 ### Added

@@ -1,6 +1,6 @@
 # Limitations
 
-Status: 1.2.0 — all phases complete. Version 1.2.0.
+Status: 1.2.1 — all phases complete. Version 1.2.1.
 
 **This document is mandatory** (spec §69) and is surfaced in the application under
 About → Limitations.

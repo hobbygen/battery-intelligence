@@ -1,6 +1,6 @@
 # Release QA Checklist
 
-Status: Phase 14. Version 1.2.0. Covers `testing.md` §7–§8, spec §62/§68 and
+Status: Phase 14. Version 1.2.1. Covers `testing.md` §7–§8, spec §62/§68 and
 `prd.md` §6.
 
 Everything a test can verify is in the automated suites (374 tests as of Phase

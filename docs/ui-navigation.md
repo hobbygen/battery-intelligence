@@ -1,6 +1,6 @@
 # UI Navigation and Design
 
-Status: 1.2.0 — all phases complete. Version 1.2.0.
+Status: 1.2.1 — all phases complete. Version 1.2.1.
 
 Covers spec §6–§8, §38–§43.
 

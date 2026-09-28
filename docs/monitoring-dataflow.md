@@ -1,6 +1,6 @@
 # Monitoring Data Flow
 
-Status: 1.2.0 — all phases complete. Version 1.2.0.
+Status: 1.2.1 — all phases complete. Version 1.2.1.
 
 Covers spec §30, §31, §32, §45, §74, §75.
 

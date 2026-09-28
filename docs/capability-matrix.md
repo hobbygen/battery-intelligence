@@ -1,6 +1,6 @@
 # Windows API Capability Matrix
 
-Status: 1.2.0 — all phases complete. Version 1.2.0.
+Status: 1.2.1 — all phases complete. Version 1.2.1.
 
 **Phase 2 confirmation (2026-09-05):** every figure in section 1 below was
 re-verified through the running application (`CompositeBatteryProvider` +

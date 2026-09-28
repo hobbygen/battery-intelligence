@@ -1,6 +1,6 @@
 # Windows API Strategy
 
-Status: 1.2.0 — all phases complete. Version 1.2.0.
+Status: 1.2.1 — all phases complete. Version 1.2.1.
 
 Covers spec §71, §72. The per-metric availability table lives in
 `capability-matrix.md`; this document covers **which APIs are used, how they are
