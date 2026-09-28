@@ -1,23 +1,21 @@
 BATTERY INTELLIGENCE — PROGRESS TIMELINE
-Last updated: 2026-09-07 (1.0.0 complete)
+Last updated: 2026-09-28 (1.2.0 released)
 Purpose: read this file first when resuming work, instead of re-reading the
 whole codebase. Full detail always lives in docs/roadmap.md (phase-by-phase,
 with exit criteria and deviations) and docs/traceability.md (requirement ->
 implementation -> test). This file is the fast orientation layer on top of those.
 
 ============================================================
-CURRENT STATUS: 1.0.0 — ALL 15 PHASES COMPLETE.
-Phase 15 (Release): AppPaths pinned to %LOCALAPPDATA% (survives
-packaged<->unpackaged), tools/verify-no-simulation.ps1 gate,
-Package.appxmanifest + gated -p:EnablePackaging build + asset
-generator, StartupService (R-090), About LIMITATIONS card,
-LICENSE/README/CHANGELOG, docs/release.md runbook, /docs §69 pass.
-MSIX build/sign/install + 24h soak + Win10 = docs/release.md +
-docs/qa-checklist.md (release-engineer, clean VM).
+CURRENT STATUS: 1.2.0 RELEASED (2026-09-28) — ALL 15 PHASES COMPLETE.
+Released: 1.0.0 (2026-09-08), 1.1.0 (2026-09-25, health-score fix),
+1.2.0 (2026-09-28, voice alerts). See "RELEASES AFTER 1.0" near the end.
+Public: GitHub Release v1.2.0 (latest) + battery-intelligence.netlify.app.
+Still open: code-signing cert, MSIX build/sign/install, 24h soak, Win10 +
+clean-VM install pass = docs/release.md + docs/qa-checklist.md.
 ============================================================
 
 Solution builds clean (0 warnings, 0 errors) in Debug and Release (unpackaged).
-Test totals: 379 passing — 275 Tests.Unit, 37 Tests.Simulation, 67 Tests.Integration.
+Test totals: 415 passing — 301 Tests.Unit, 45 Tests.Simulation, 69 Tests.Integration.
 Verified live on the reference machine (Dell laptop, Windows 11 build 26200,
 battery DELL 68ND307 / SMP / LiP, 40.0% retention — this is a real worn battery,
 not an error, and is documented as the reference reading in capability-matrix.md).
@@ -892,7 +890,33 @@ Post-1.0 candidates (not blockers): reduce working set; a full app-wide
 read-only mode for a corrupt DB; a Settings toggle for Monitoring.Paused;
 per-value estimation hover on the remaining pages; custom History date ranges.
 
-POST-1.1 — Voice alerts (2026-09-28)
+============================================================
+RELEASES AFTER 1.0
+============================================================
+Release procedure (learned the hard way — docs/release.md §2, §3a):
+  1. Bump THREE files: Directory.Build.props, Package.appxmanifest,
+     tools/installer/BatteryIntelligence.iss. Cut the CHANGELOG section; refresh
+     the Status: line (line 3) of every docs/*.md. Commit "Release x.y.z", push.
+  2. powershell -ExecutionPolicy Bypass -File tools/build-installer.ps1 from that
+     commit (ProductVersion embeds the sha). It does NOT make the portable zip —
+     Compress-Archive dist/self-contained/* by hand — and its SHA256SUMS.txt
+     hashes EVERY exe/zip in dist/, old versions included: rewrite it with only
+     the new two before uploading.
+  3. gh release create vX --target <release sha> --latest (installer, zip, sums).
+  4. Update version + link + SHA-256 in website/index.html,
+     netlify deploy --dir website --prod --site 5138bbfb-7296-42f7-ba66-7efa5567e9e4,
+     commit "Publish the x.y.z installer checksum".
+
+1.1.0 — Health-score correctness (2026-09-25; commits aef8241, 0397999, 495ff5d)
+------------------------------------------------------------
+From the CHANGELOG / release notes: per-source mAh/mWh unit flags (retention was
+out by ~pack voltage when its halves came from different sources); retention
+outside 15–125% graded Suspect and excluded; HealthScoreV2 (habit factors can only
+deduct, capped at 5 pts; score capped at measured retention; dead bands);
+migration V003 deletes all 1.0.0 health snapshots (backup battery.db.bak-v003) —
+database.md is schema version 3; title-bar theme button shows sun/moon/monitor.
+
+1.2.0 — Voice alerts (2026-09-28)
 ------------------------------------------------------------
 Spoken clips for "battery full" and "needs charger" (low + critical).
 - Core.Alerts.VoiceAlertCues (pure): AlertType -> VoiceAlertCue
@@ -914,6 +938,23 @@ Spoken clips for "battery full" and "needs charger" (low + critical).
 Verified 2026-09-28: Debug build 0 warnings / 0 errors; 415 tests pass
 (301 + 45 + 69); all 8 clips copied to <exe>\Sounds\. Confirmed by the user in
 the running app: the Alerts-page pickers work and the clips play.
+
+Released 2026-09-28:
+- Commits: 6565c44 (feature), 0f4b5f7 "Release 1.2.0" (tag v1.2.0 — the
+  installer is built from here; exe ProductVersion 1.2.0+0f4b5f7), 1f47918
+  (website checksum). Release build 0/0.
+- GitHub Release v1.2.0 (latest):
+    BatteryIntelligence-Setup-1.2.0.exe  71,526,804 B
+      SHA-256 eeecbc352d4c5559c3cb005f39a06f09e7e81c84660020c3431c1f634a46cdc6
+    BatteryIntelligence-1.2.0-win-x64-self-contained.zip  101,342,479 B
+      SHA-256 a43ca75a3b7d2e437d0ff9ee94c4cd5626fbb61870f07218caf67b721f7f5f46
+    SHA256SUMS.txt (those two only). GitHub's asset digests match.
+  All 8 clips confirmed in the published payload's Sounds\ folder.
+- Website: download link + hash -> v1.2.0, "Alerts & insights" card mentions
+  voice alerts. Deployed (deploy 6aba82c72150fa244d667618); live page and the
+  download link (HTTP 200, full size) checked.
+- Not done: installer unsigned (SmartScreen warns); no clean-VM install/upgrade
+  test of 1.2.0.
 
 ============================================================
 PROJECT STRUCTURE QUICK MAP (for when you do need to open files)
@@ -973,7 +1014,9 @@ src/BatteryIntelligence.App           — WinUI 3 shell, Views, ViewModels, comp
     Services/WindowsToastPresenter is the only file touching AppNotificationManager;
     Services/ExportService is the only file touching the file-save picker;
     Services/LogFileReader (Phase 12) is the only file reading the Serilog files;
-    Services/SelfMetrics (Phase 13) is the process footprint provider.
+    Services/SelfMetrics (Phase 13) is the process footprint provider;
+    Services/VoiceAlertPlayer (1.2.0) is the only file touching media playback.
+sounds/ (repo root, 1.2.0) — voice alert clips; App.csproj links them to <exe>\Sounds\.
     Data-side history reads: Data/HistoryReadStore, Data/ExportDataSource,
     Data/HistoryMaintenance (Phase 11).
 tests/BatteryIntelligence.Tests.Unit         — pure logic, net10.0, fast.
