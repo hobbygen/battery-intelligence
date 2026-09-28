@@ -1,21 +1,22 @@
 BATTERY INTELLIGENCE — PROGRESS TIMELINE
-Last updated: 2026-09-28 (1.2.0 released)
+Last updated: 2026-09-28 (1.2.1 released)
 Purpose: read this file first when resuming work, instead of re-reading the
 whole codebase. Full detail always lives in docs/roadmap.md (phase-by-phase,
 with exit criteria and deviations) and docs/traceability.md (requirement ->
 implementation -> test). This file is the fast orientation layer on top of those.
 
 ============================================================
-CURRENT STATUS: 1.2.0 RELEASED (2026-09-28) — ALL 15 PHASES COMPLETE.
+CURRENT STATUS: 1.2.1 RELEASED (2026-09-28) — ALL 15 PHASES COMPLETE.
 Released: 1.0.0 (2026-09-08), 1.1.0 (2026-09-25, health-score fix),
-1.2.0 (2026-09-28, voice alerts). See "RELEASES AFTER 1.0" near the end.
-Public: GitHub Release v1.2.0 (latest) + battery-intelligence.netlify.app.
+1.2.0 (2026-09-28, voice alerts), 1.2.1 (2026-09-28, unknown-rate crash fix).
+See "RELEASES AFTER 1.0" near the end.
+Public: GitHub Release v1.2.1 (latest) + battery-intelligence.netlify.app.
 Still open: code-signing cert, MSIX build/sign/install, 24h soak, Win10 +
 clean-VM install pass = docs/release.md + docs/qa-checklist.md.
 ============================================================
 
 Solution builds clean (0 warnings, 0 errors) in Debug and Release (unpackaged).
-Test totals: 415 passing — 301 Tests.Unit, 45 Tests.Simulation, 69 Tests.Integration.
+Test totals: 423 passing — 309 Tests.Unit, 45 Tests.Simulation, 69 Tests.Integration.
 Verified live on the reference machine (Dell laptop, Windows 11 build 26200,
 battery DELL 68ND307 / SMP / LiP, 40.0% retention — this is a real worn battery,
 not an error, and is documented as the reference reading in capability-matrix.md).
@@ -955,6 +956,32 @@ Released 2026-09-28:
   download link (HTTP 200, full size) checked.
 - Not done: installer unsigned (SmartScreen warns); no clean-VM install/upgrade
   test of 1.2.0.
+
+1.2.1 — Unknown charge rate crashed the battery read (2026-09-28)
+------------------------------------------------------------
+Found in the app log after a live run: "Battery read failed (attempt 1)" —
+OverflowException at BatterySampleValidation.cs:64.
+- Cause: Windows reports BATTERY_UNKNOWN_RATE (0x80000000) for a moment around a
+  charger plug/unplug. WmiBatterySource cast/negated ChargeRate/DischargeRate
+  WITHOUT the BatterySentinels filter every other WMI field uses -> PowerMw =
+  int.MinValue -> Math.Abs threw -> the WHOLE refresh failed (percentage/state
+  froze; Diagnostics Retrying). Present since 1.0.0.
+- Fix: Core BatteryCalculations.SignedRateFromChargeDischarge (pure; sentinel or
+  > int.MaxValue -> Unavailable), used by WmiBatterySource. WinRtBatterySource
+  treats int.MinValue as Unavailable (NOT -1: the rate is signed). The validator
+  compares Math.Abs((long)power) so no value can throw — extreme -> Suspect.
+- Tests: +8 unit (rate helper signs/sentinels/overflow; validation regression
+  for int.MinValue/MaxValue). 423 pass (309 + 45 + 69). Build 0/0.
+- Released: commits b695219 (fix), f4f6666 "Release 1.2.1" (tag v1.2.1; exe
+  ProductVersion 1.2.1+f4f6666). GitHub Release v1.2.1 (Latest):
+    BatteryIntelligence-Setup-1.2.1.exe  71,506,919 B
+      SHA-256 b639e06f496113540965007327688c5b9813f9585b366add6bda1209914fd153
+    BatteryIntelligence-1.2.1-win-x64-self-contained.zip  101,343,260 B
+      SHA-256 3a6bcd807b2cdabf99db9072877ebccdcc54e6a232de9ee354d460598f8ab87b
+  GitHub digests match; 8 clips in payload. Website -> v1.2.1 (deploy
+  6aba9522b602d624373d49d8); live page + download (HTTP 200, full size) checked.
+- Not verified: the fix under a real 0x80000000 from hardware (the condition is
+  transient and not reproducible on demand) — covered by the unit tests only.
 
 ============================================================
 PROJECT STRUCTURE QUICK MAP (for when you do need to open files)
