@@ -1,6 +1,6 @@
 # Session Engine
 
-Status: 1.1.0 — all phases complete. Version 1.1.0.
+Status: 1.2.0 — all phases complete. Version 1.2.0.
 
 **Phase 4 confirmation (2026-09-05):** implemented as `Core.Sessions.SessionStateMachine`
 (pure, per section 8) driven by `Sessions.SessionMonitoringService` (the

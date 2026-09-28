@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Status: 1.1.0 — all 15 phases complete. Version 1.1.0.
+Status: 1.2.0 — all 15 phases complete. Version 1.2.0.
 
 Maps spec §67's fifteen phases to concrete deliverables and exit criteria.
 

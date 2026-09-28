@@ -1,6 +1,6 @@
 # Release Runbook
 
-Status: 1.1.0. Covers spec §58 (distribution, data preservation) and §69 (the
+Status: 1.2.0. Covers spec §58 (distribution, data preservation) and §69 (the
 completed doc set). Phase 15.
 
 This is the step-by-step for cutting a release. Items marked **(clean VM)** need a

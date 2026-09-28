@@ -1,6 +1,6 @@
 # Estimation Strategy
 
-Status: 1.1.0 — all phases complete. Version 1.1.0.
+Status: 1.2.0 — all phases complete. Version 1.2.0.
 
 Covers spec §3, §15, §51, §52, §55, §76.
 

@@ -1,6 +1,6 @@
 # Security Review
 
-Status: Phase 14. Version 1.1.0. Covers spec §46 and requirement **R-100**.
+Status: Phase 14. Version 1.2.0. Covers spec §46 and requirement **R-100**.
 
 Battery Intelligence has a deliberately small attack surface: a local desktop
 utility, no server, no account, no network. This review walks the properties

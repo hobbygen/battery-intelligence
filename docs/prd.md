@@ -1,6 +1,6 @@
 # Product Requirements Document
 
-Status: 1.1.0 — all phases complete. Version 1.1.0.
+Status: 1.2.0 — all phases complete. Version 1.2.0.
 Source of record: `Battery_Intelligence_Details.md` (spec §1–§82).
 
 This document does not restate the specification. It fixes the decisions the
